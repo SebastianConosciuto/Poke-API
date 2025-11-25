@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
+from app.routers import auth, pokemon
 
-app = FastAPI()
+app = FastAPI(title="Pokemon Trainer API", version="1.0.0")
 
-# CORS
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -13,15 +13,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(auth.router)
+app.include_router(pokemon.router)
+
 @app.get("/")
 def root():
-    return {"message": "Pokemon API"}
-
-@app.get("/pokemon/{name}")
-async def get_pokemon(name: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://pokeapi.co/api/v2/pokemon/{name}")
-        return response.json()
+    return {
+        "message": "Pokemon Trainer API",
+        "version": "1.0.0",
+        "endpoints": {
+            "auth": "/auth",
+            "pokemon": "/pokemon",
+            "docs": "/docs"
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn
