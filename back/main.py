@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, pokemon
-
+from app.routers import auth
 app = FastAPI(title="Pokemon Trainer API", version="1.0.0")
 
 # CORS Configuration
@@ -15,7 +14,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
-app.include_router(pokemon.router)
 
 @app.get("/")
 def root():
@@ -24,7 +22,6 @@ def root():
         "version": "1.0.0",
         "endpoints": {
             "auth": "/auth",
-            "pokemon": "/pokemon",
             "docs": "/docs"
         }
     }
