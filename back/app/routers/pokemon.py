@@ -18,6 +18,7 @@ async def get_pokemon_list(
     types: Optional[str] = Query(None, description="Comma-separated type names (max 2)"),
     sort_by: Optional[str] = Query(None, description="Sort field: id, name, height, weight, stats_total"),
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order: asc or desc"),
+    captured_only: bool = Query(False, description="Show only captured Pokemon"),
     current_user: str = Depends(get_current_user)
 ):
     """
@@ -28,6 +29,7 @@ async def get_pokemon_list(
     - **types**: Filter by types (comma-separated, max 2 types)
     - **sort_by**: Sort by field (id, name, height, weight, stats_total)
     - **sort_order**: Sort order (asc or desc)
+    - **captured_only**: If true, only show Pokemon captured by the current user
     """
     # Parse types filter
     type_list = None
@@ -53,7 +55,9 @@ async def get_pokemon_list(
             page_size=page_size,
             types=type_list,
             sort_by=sort_by,
-            sort_order=sort_order
+            sort_order=sort_order,
+            trainer_id=current_user,
+            captured_only=captured_only
         )
         return result
     except Exception as e:
@@ -82,4 +86,38 @@ async def get_pokemon_detail(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch Pokemon detail: {str(e)}"
+        )
+
+@router.post("/{pokemon_id}/capture")
+async def capture_pokemon(
+    pokemon_id: int,
+    current_user: str = Depends(get_current_user)
+):
+    """Capture a Pokemon"""
+    try:
+        result = await PokemonService.capture_pokemon(current_user, pokemon_id)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to capture Pokemon: {str(e)}"
+        )
+
+@router.delete("/{pokemon_id}/capture")
+async def release_pokemon(
+    pokemon_id: int,
+    current_user: str = Depends(get_current_user)
+):
+    """Release a captured Pokemon"""
+    try:
+        result = await PokemonService.release_pokemon(current_user, pokemon_id)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to release Pokemon: {str(e)}"
         )

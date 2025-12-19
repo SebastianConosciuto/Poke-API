@@ -26,6 +26,7 @@ class PokemonBasic(BaseModel):
     height: int
     weight: int
     stats_total: int  # Sum of all base stats
+    is_captured: bool = False  # Whether this Pokemon is captured by the current user
 
 class PokemonDetail(BaseModel):
     """Schema for detailed Pokemon info"""

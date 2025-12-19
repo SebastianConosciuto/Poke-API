@@ -13,6 +13,8 @@ import {
   CircularProgress,
   Alert,
   IconButton,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import { Icon } from '@iconify/react';
 import { styled } from '@mui/material/styles';
@@ -24,6 +26,7 @@ import {
   setTypeFilter,
   setSortBy,
   setSortOrder,
+  setCapturedOnly,
   clearFilters,
   clearError,
 } from '../../features/pokemon/pokemonSlice';
@@ -95,6 +98,9 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
   '& .MuiInputLabel-root': {
     fontFamily: '"Press Start 2P", monospace',
     fontSize: '0.7rem',
+    '&.MuiInputLabel-shrink': {
+      transform: 'translate(14px, -12px) scale(0.75)',
+    },
   },
 }));
 
@@ -133,8 +139,9 @@ const Pokedex: React.FC = () => {
         page: 1,
         page_size: 20,
         types: filters.types.join(',') || undefined,
-        sort_by: filters.sortBy || undefined,
+        sort_by: filters.sortBy,
         sort_order: filters.sortOrder,
+        captured_only: filters.capturedOnly,
       })
     );
   }, [dispatch, filters]);
@@ -173,8 +180,9 @@ const Pokedex: React.FC = () => {
           page: pagination.currentPage + 1,
           page_size: pagination.pageSize,
           types: filters.types.join(',') || undefined,
-          sort_by: filters.sortBy || undefined,
+          sort_by: filters.sortBy,
           sort_order: filters.sortOrder,
+          captured_only: filters.capturedOnly,
         })
       );
     }
@@ -198,7 +206,7 @@ const Pokedex: React.FC = () => {
 
   const handleSortChange = (event: any) => {
     const value = event.target.value;
-    dispatch(setSortBy(value || null));
+    dispatch(setSortBy(value || 'id'));
   };
 
   const handleSortOrderChange = (order: 'asc' | 'desc') => {
@@ -291,6 +299,34 @@ const Pokedex: React.FC = () => {
             </Box>
           </Box>
 
+          {/* Captured Filter */}
+          <Box sx={{ mb: 3 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={filters.capturedOnly}
+                  onChange={(e) => dispatch(setCapturedOnly(e.target.checked))}
+                  sx={{
+                    color: 'primary.main',
+                    '&.Mui-checked': {
+                      color: 'primary.main',
+                    },
+                  }}
+                />
+              }
+              label={
+                <Typography
+                  sx={{
+                    fontFamily: '"Roboto Mono", monospace',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  Show Only Captured
+                </Typography>
+              }
+            />
+          </Box>
+
           {/* Sort Controls */}
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
@@ -301,6 +337,7 @@ const Pokedex: React.FC = () => {
                   onChange={handleSortChange}
                   label="Sort By"
                 >
+                  <MenuItem value="">None</MenuItem>
                   <MenuItem value="id">ID</MenuItem>
                   <MenuItem value="name">Name</MenuItem>
                   <MenuItem value="height">Height</MenuItem>
