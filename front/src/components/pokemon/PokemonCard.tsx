@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Chip } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { Icon } from '@iconify/react';
 import PixelCard from '../common/PixelCard';
 import PixelButton from '../common/PixelButton';
 import type { PokemonBasic } from '../../services/pokemonService';
@@ -11,11 +12,27 @@ const CardContainer = styled(PixelCard)(({ theme }) => ({
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
+  position: 'relative',
   
   '&:hover': {
     transform: 'translate(-2px, -2px)',
     boxShadow: '10px 10px 0px rgba(0, 0, 0, 0.25)',
   },
+}));
+
+const CaptureIndicator = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  top: '8px',
+  right: '8px',
+  zIndex: 10,
+  backgroundColor: '#fff',
+  border: '2px solid #000',
+  borderRadius: '50%',
+  padding: '4px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  boxShadow: '2px 2px 0px rgba(0, 0, 0, 0.2)',
 }));
 
 const PokemonImage = styled('img')(({ theme }) => ({
@@ -53,49 +70,47 @@ const TypesContainer = styled(Box)(({ theme }) => ({
 }));
 
 const TypeChip = styled(Chip)<{ pokemonType: string }>(({ theme, pokemonType }) => {
-  // Pokemon type colors
-  const typeColors: Record<string, { bg: string; text: string }> = {
-    normal: { bg: '#A8A878', text: '#000' },
-    fire: { bg: '#F08030', text: '#fff' },
-    water: { bg: '#6890F0', text: '#fff' },
-    electric: { bg: '#F8D030', text: '#000' },
-    grass: { bg: '#78C850', text: '#000' },
-    ice: { bg: '#98D8D8', text: '#000' },
-    fighting: { bg: '#C03028', text: '#fff' },
-    poison: { bg: '#A040A0', text: '#fff' },
-    ground: { bg: '#E0C068', text: '#000' },
-    flying: { bg: '#A890F0', text: '#000' },
-    psychic: { bg: '#F85888', text: '#fff' },
-    bug: { bg: '#A8B820', text: '#000' },
-    rock: { bg: '#B8A038', text: '#fff' },
-    ghost: { bg: '#705898', text: '#fff' },
-    dragon: { bg: '#7038F8', text: '#fff' },
-    dark: { bg: '#705848', text: '#fff' },
-    steel: { bg: '#B8B8D0', text: '#000' },
-    fairy: { bg: '#EE99AC', text: '#000' },
+  const typeColors: { [key: string]: string } = {
+    normal: '#A8A878',
+    fire: '#F08030',
+    water: '#6890F0',
+    electric: '#F8D030',
+    grass: '#78C850',
+    ice: '#98D8D8',
+    fighting: '#C03028',
+    poison: '#A040A0',
+    ground: '#E0C068',
+    flying: '#A890F0',
+    psychic: '#F85888',
+    bug: '#A8B820',
+    rock: '#B8A038',
+    ghost: '#705898',
+    dragon: '#7038F8',
+    dark: '#705848',
+    steel: '#B8B8D0',
+    fairy: '#EE99AC',
   };
 
-  const colors = typeColors[pokemonType] || { bg: '#68A090', text: '#fff' };
-
   return {
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '0.55rem',
-    backgroundColor: colors.bg,
-    color: colors.text,
+    backgroundColor: typeColors[pokemonType] || '#777',
+    color: '#fff',
+    fontFamily: '"Roboto Mono", monospace',
+    fontSize: '0.7rem',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
     border: '2px solid #000',
     borderRadius: 0,
-    textTransform: 'uppercase',
-    padding: theme.spacing(1, 1.5),
-    height: 'auto',
+    '& .MuiChip-label': {
+      padding: '0 8px',
+    },
   };
 });
 
 const StatsText = styled(Typography)(({ theme }) => ({
   fontFamily: '"Roboto Mono", monospace',
-  fontSize: '0.7rem',
-  color: theme.palette.text.secondary,
+  fontSize: '0.75rem',
   textAlign: 'center',
-  marginTop: theme.spacing(1),
+  marginBottom: theme.spacing(0.5),
 }));
 
 interface PokemonCardProps {
@@ -106,6 +121,18 @@ interface PokemonCardProps {
 const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onViewDetails }) => {
   return (
     <CardContainer showLight showIndicators>
+      {/* Capture Indicator - Show pokeball if captured */}
+      {pokemon.is_captured && (
+        <CaptureIndicator>
+          <Icon 
+            icon="game-icons:pokecog" 
+            width={20} 
+            height={20}
+            style={{ color: '#EF5350' }}
+          />
+        </CaptureIndicator>
+      )}
+      
       <Box sx={{ flexGrow: 1 }}>
         <PokemonId>#{pokemon.id.toString().padStart(3, '0')}</PokemonId>
         

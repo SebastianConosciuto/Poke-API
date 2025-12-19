@@ -15,6 +15,7 @@ interface PokemonState {
     types: string[];
     sortBy: 'id' | 'name' | 'height' | 'weight' | 'stats_total';
     sortOrder: 'asc' | 'desc';
+    capturedOnly: boolean;  // New filter for captured Pokemon
   };
   pagination: {
     currentPage: number;
@@ -36,6 +37,7 @@ const initialState: PokemonState = {
     types: [],
     sortBy: 'id',
     sortOrder: 'asc',
+    capturedOnly: false,
   },
   pagination: {
     currentPage: 1,
@@ -102,6 +104,34 @@ export const fetchPokemonDetail = createAsyncThunk(
   }
 );
 
+export const capturePokemon = createAsyncThunk(
+  'pokemon/capture',
+  async (pokemonId: number, { rejectWithValue }) => {
+    try {
+      const result = await pokemonService.capture(pokemonId);
+      return { pokemonId, ...result };
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data?.detail || 'Failed to capture Pokemon'
+      );
+    }
+  }
+);
+
+export const releasePokemon = createAsyncThunk(
+  'pokemon/release',
+  async (pokemonId: number, { rejectWithValue }) => {
+    try {
+      const result = await pokemonService.release(pokemonId);
+      return { pokemonId, ...result };
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data?.detail || 'Failed to release Pokemon'
+      );
+    }
+  }
+);
+
 const pokemonSlice = createSlice({
   name: 'pokemon',
   initialState,
@@ -121,6 +151,11 @@ const pokemonSlice = createSlice({
     },
     setSortOrder: (state, action: PayloadAction<'asc' | 'desc'>) => {
       state.filters.sortOrder = action.payload;
+      state.list = [];
+      state.pagination.currentPage = 1;
+    },
+    setCapturedFilter: (state, action: PayloadAction<boolean>) => {
+      state.filters.capturedOnly = action.payload;
       state.list = [];
       state.pagination.currentPage = 1;
     },
@@ -169,7 +204,7 @@ const pokemonSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
       })
-      // Fetch more Pokemon (infinite scroll)
+      // Fetch more Pokemon
       .addCase(fetchMorePokemon.pending, (state) => {
         state.isLoadingMore = true;
       })
@@ -199,6 +234,41 @@ const pokemonSlice = createSlice({
       .addCase(fetchPokemonDetail.rejected, (state, action) => {
         state.isLoadingDetail = false;
         state.error = action.payload as string;
+      })
+      // Capture Pokemon
+      .addCase(capturePokemon.fulfilled, (state, action) => {
+        // Update the Pokemon in the list
+        const pokemon = state.list.find((p) => p.id === action.payload.pokemonId);
+        if (pokemon) {
+          pokemon.is_captured = true;
+        }
+        // Update current Pokemon if it's the same one
+        if (state.currentPokemon && state.currentPokemon.id === action.payload.pokemonId) {
+          state.currentPokemon.is_captured = true;
+        }
+      })
+      .addCase(capturePokemon.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+      // Release Pokemon
+      .addCase(releasePokemon.fulfilled, (state, action) => {
+        // Update the Pokemon in the list
+        const pokemon = state.list.find((p) => p.id === action.payload.pokemonId);
+        if (pokemon) {
+          pokemon.is_captured = false;
+        }
+        // Update current Pokemon if it's the same one
+        if (state.currentPokemon && state.currentPokemon.id === action.payload.pokemonId) {
+          state.currentPokemon.is_captured = false;
+          state.currentPokemon.nickname = null;
+        }
+        // If captured_only filter is active, remove from list
+        if (state.filters.capturedOnly) {
+          state.list = state.list.filter((p) => p.id !== action.payload.pokemonId);
+        }
+      })
+      .addCase(releasePokemon.rejected, (state, action) => {
+        state.error = action.payload as string;
       });
   },
 });
@@ -207,6 +277,7 @@ export const {
   setTypeFilter,
   setSortBy,
   setSortOrder,
+  setCapturedFilter,
   clearFilters,
   clearError,
   clearCurrentPokemon,

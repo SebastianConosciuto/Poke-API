@@ -13,6 +13,7 @@ export interface PokemonBasic {
   height: number;
   weight: number;
   stats_total: number;
+  is_captured: boolean;  // Whether the user has captured this Pokemon
 }
 
 export interface PokemonStat {
@@ -31,6 +32,8 @@ export interface PokemonDetail {
   stats_total: number;
   abilities: Array<{ name: string; is_hidden: boolean }>;
   base_experience: number | null;
+  is_captured: boolean;  // Whether the user has captured this Pokemon
+  nickname: string | null;  // Custom nickname if captured
 }
 
 export interface PokemonListResponse {
@@ -48,6 +51,7 @@ export interface PokemonListParams {
   types?: string;  // Comma-separated type names
   sort_by?: 'id' | 'name' | 'height' | 'weight' | 'stats_total';
   sort_order?: 'asc' | 'desc';
+  captured_only?: boolean;  // Filter for only captured Pokemon
 }
 
 export const pokemonService = {
@@ -63,6 +67,16 @@ export const pokemonService = {
 
   getDetail: async (pokemonId: number): Promise<PokemonDetail> => {
     const response = await api.get(`/pokemon/${pokemonId}`);
+    return response.data;
+  },
+
+  capture: async (pokemonId: number): Promise<any> => {
+    const response = await api.post(`/pokemon/${pokemonId}/capture`);
+    return response.data;
+  },
+
+  release: async (pokemonId: number): Promise<any> => {
+    const response = await api.delete(`/pokemon/${pokemonId}/capture`);
     return response.data;
   },
 };

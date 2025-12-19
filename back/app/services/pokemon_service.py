@@ -4,6 +4,7 @@ Data is pre-populated from PokeAPI using populate_pokemon.py
 """
 
 from typing import List, Optional
+from fastapi import HTTPException, status
 from app.database import supabase
 from app.models.pokemon import (
     PokemonBasic,
@@ -43,7 +44,9 @@ class PokemonService:
         page_size: int = 20,
         types: Optional[List[str]] = None,
         sort_by: str = 'id',
-        sort_order: str = 'asc'
+        sort_order: str = 'asc',
+        trainer_id: Optional[str] = None,
+        captured_only: bool = False
     ) -> PokemonListResponse:
         """
         Get paginated list of Pokemon from database with filtering and sorting
@@ -54,13 +57,15 @@ class PokemonService:
             types: List of types to filter by (AND logic)
             sort_by: Field to sort by (id, name, height, weight, stats_total)
             sort_order: Sort order (asc or desc)
+            trainer_id: Current trainer ID to check captured status
+            captured_only: If True, only return captured Pokemon
         """
         try:
             # Limit page size
             page_size = min(page_size, 50)
             offset = (page - 1) * page_size
             
-            # Build query
+            # Build base query
             query = supabase.table('pokemon').select(
                 'id, name, types, sprite_official, sprite_default, height, weight, stats_total',
                 count='exact'
@@ -70,6 +75,26 @@ class PokemonService:
             if types:
                 for pokemon_type in types:
                     query = query.contains('types', [pokemon_type])
+            
+            # If captured_only is True, filter by captured Pokemon
+            if captured_only and trainer_id:
+                # Get list of captured Pokemon IDs for this trainer
+                captured_response = supabase.table('captured_pokemon').select('pokemon_id').eq('trainer_id', trainer_id).execute()
+                captured_ids = [row['pokemon_id'] for row in (captured_response.data or [])]
+                
+                if not captured_ids:
+                    # No captured Pokemon, return empty list
+                    return PokemonListResponse(
+                        pokemon=[],
+                        total=0,
+                        page=page,
+                        page_size=page_size,
+                        has_more=False,
+                        total_pages=0
+                    )
+                
+                # Filter to only show captured Pokemon
+                query = query.in_('id', captured_ids)
             
             # Apply sorting
             ascending = sort_order == 'asc'
@@ -84,6 +109,12 @@ class PokemonService:
             total = response.count if response.count is not None else 0
             pokemon_data = response.data or []
             
+            # Get captured status for current trainer
+            captured_ids = set()
+            if trainer_id:
+                captured_response = supabase.table('captured_pokemon').select('pokemon_id').eq('trainer_id', trainer_id).execute()
+                captured_ids = {row['pokemon_id'] for row in captured_response.data}
+            
             # Transform to PokemonBasic objects
             pokemon_list = []
             for p in pokemon_data:
@@ -94,11 +125,12 @@ class PokemonService:
                     sprite=p['sprite_official'] or p['sprite_default'],
                     height=p['height'],
                     weight=p['weight'],
-                    stats_total=p['stats_total']
+                    stats_total=p['stats_total'],
+                    is_captured=p['id'] in captured_ids
                 ))
             
             # Calculate pagination info
-            total_pages = (total + page_size - 1) // page_size
+            total_pages = (total + page_size - 1) // page_size if total > 0 else 0
             has_more = page < total_pages
             
             return PokemonListResponse(
@@ -115,7 +147,7 @@ class PokemonService:
             raise
     
     @staticmethod
-    async def fetch_pokemon_detail(pokemon_id: int) -> Optional[PokemonDetail]:
+    async def fetch_pokemon_detail(pokemon_id: int, trainer_id: Optional[str] = None) -> Optional[PokemonDetail]:
         """Get detailed Pokemon information by ID from database"""
         try:
             response = supabase.table('pokemon').select('*').eq('id', pokemon_id).execute()
@@ -124,6 +156,15 @@ class PokemonService:
                 return None
             
             p = response.data[0]
+            
+            # Check if captured by trainer
+            is_captured = False
+            nickname = None
+            if trainer_id:
+                captured_response = supabase.table('captured_pokemon').select('nickname').eq('trainer_id', trainer_id).eq('pokemon_id', pokemon_id).execute()
+                if captured_response.data:
+                    is_captured = True
+                    nickname = captured_response.data[0].get('nickname')
             
             # Transform stats to PokemonStat objects
             stats = [
@@ -145,9 +186,93 @@ class PokemonService:
                 stats=stats,
                 stats_total=p['stats_total'],
                 abilities=p.get('abilities', []),
-                base_experience=p.get('base_experience')
+                base_experience=p.get('base_experience'),
+                is_captured=is_captured,
+                nickname=nickname
             )
             
         except Exception as e:
             print(f"Error fetching Pokemon {pokemon_id}: {e}")
             return None
+    
+    @staticmethod
+    async def capture_pokemon(trainer_id: str, pokemon_id: int, nickname: Optional[str] = None):
+        """Capture a Pokemon for a trainer"""
+        try:
+            # Check if Pokemon exists
+            pokemon_response = supabase.table('pokemon').select('id, name').eq('id', pokemon_id).execute()
+            if not pokemon_response.data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Pokemon with ID {pokemon_id} not found"
+                )
+            
+            pokemon_name = pokemon_response.data[0]['name']
+            
+            # Check if already captured
+            existing = supabase.table('captured_pokemon').select('id').eq('trainer_id', trainer_id).eq('pokemon_id', pokemon_id).execute()
+            if existing.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"You have already captured {pokemon_name.capitalize()}!"
+                )
+            
+            # Insert capture record
+            capture_data = {
+                'trainer_id': trainer_id,
+                'pokemon_id': pokemon_id,
+                'nickname': nickname
+            }
+            response = supabase.table('captured_pokemon').insert(capture_data).execute()
+            
+            return {
+                'message': f'Successfully captured {pokemon_name.capitalize()}!',
+                'pokemon_id': pokemon_id,
+                'pokemon_name': pokemon_name,
+                'captured': True
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to capture Pokemon: {str(e)}"
+            )
+    
+    @staticmethod
+    async def release_pokemon(trainer_id: str, pokemon_id: int):
+        """Release a captured Pokemon"""
+        try:
+            # Check if Pokemon is captured
+            captured = supabase.table('captured_pokemon').select('id').eq('trainer_id', trainer_id).eq('pokemon_id', pokemon_id).execute()
+            if not captured.data:
+                # Get Pokemon name for better error message
+                pokemon_response = supabase.table('pokemon').select('name').eq('id', pokemon_id).execute()
+                pokemon_name = pokemon_response.data[0]['name'] if pokemon_response.data else f"Pokemon #{pokemon_id}"
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"You haven't captured {pokemon_name.capitalize()} yet"
+                )
+            
+            # Delete capture record
+            supabase.table('captured_pokemon').delete().eq('trainer_id', trainer_id).eq('pokemon_id', pokemon_id).execute()
+            
+            # Get Pokemon name for response
+            pokemon_response = supabase.table('pokemon').select('name').eq('id', pokemon_id).execute()
+            pokemon_name = pokemon_response.data[0]['name'] if pokemon_response.data else f"Pokemon #{pokemon_id}"
+            
+            return {
+                'message': f'Released {pokemon_name.capitalize()}',
+                'pokemon_id': pokemon_id,
+                'pokemon_name': pokemon_name,
+                'captured': False
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to release Pokemon: {str(e)}"
+            )

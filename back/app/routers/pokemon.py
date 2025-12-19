@@ -73,7 +73,7 @@ async def get_pokemon_detail(
 ):
     """Get detailed information about a specific Pokemon"""
     try:
-        pokemon = await PokemonService.fetch_pokemon_detail(pokemon_id)
+        pokemon = await PokemonService.fetch_pokemon_detail(pokemon_id, current_user)
         if not pokemon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

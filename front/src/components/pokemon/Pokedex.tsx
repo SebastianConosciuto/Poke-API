@@ -4,7 +4,6 @@ import {
   Box,
   Container,
   Typography,
-  Grid,
   Select,
   MenuItem,
   FormControl,
@@ -12,7 +11,8 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  IconButton,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import { Icon } from '@iconify/react';
 import { styled } from '@mui/material/styles';
@@ -24,17 +24,18 @@ import {
   setTypeFilter,
   setSortBy,
   setSortOrder,
+  setCapturedFilter,
   clearFilters,
-  clearError,
 } from '../../features/pokemon/pokemonSlice';
 import { logout } from '../../features/auth/authSlice';
 import PokemonCard from './PokemonCard';
+import PokemonDetailModal from './PokemonDetailModal';
 import PixelButton from '../common/PixelButton';
 import PixelCard from '../common/PixelCard';
 import type { PokemonBasic } from '../../services/pokemonService';
 import { animations } from '../../styles/animations';
 
-const PokedexContainer = styled(Box)(({ theme }) => ({
+const PokedexContainer = styled(Box)({
   minHeight: '100vh',
   backgroundColor: '#E3F2FD',
   backgroundImage: `
@@ -46,7 +47,7 @@ const PokedexContainer = styled(Box)(({ theme }) => ({
       rgba(0, 0, 0, 0.02) 80px
     )
   `,
-}));
+});
 
 const Header = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
@@ -101,6 +102,19 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
   },
 }));
 
+const StyledCheckbox = styled(Checkbox)(({ theme }) => ({
+  '&.Mui-checked': {
+    color: theme.palette.primary.main,
+  },
+}));
+
+const CapturedLabel = styled(FormControlLabel)(({ theme }) => ({
+  '& .MuiFormControlLabel-label': {
+    fontFamily: '"Roboto Mono", monospace',
+    fontSize: '0.875rem',
+  },
+}));
+
 const LoadingContainer = styled(Box)({
   display: 'flex',
   justifyContent: 'center',
@@ -122,6 +136,8 @@ const Pokedex: React.FC = () => {
   } = useAppSelector((state) => state.pokemon);
 
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedPokemonId, setSelectedPokemonId] = useState<number | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
 
   // Fetch types on mount
@@ -138,6 +154,7 @@ const Pokedex: React.FC = () => {
         types: filters.types.join(',') || undefined,
         sort_by: filters.sortBy,
         sort_order: filters.sortOrder,
+        captured_only: filters.capturedOnly,
       })
     );
   }, [dispatch, filters]);
@@ -152,60 +169,63 @@ const Pokedex: React.FC = () => {
           !isLoading &&
           !isLoadingMore
         ) {
-          handleLoadMore();
+          dispatch(
+            fetchMorePokemon({
+              page: pagination.currentPage + 1,
+              page_size: pagination.pageSize,
+              types: filters.types.join(',') || undefined,
+              sort_by: filters.sortBy,
+              sort_order: filters.sortOrder,
+              captured_only: filters.capturedOnly,
+            })
+          );
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.5 }
     );
 
     if (observerTarget.current) {
       observer.observe(observerTarget.current);
     }
 
-    return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current);
-      }
-    };
-  }, [pagination.hasMore, isLoading, isLoadingMore]);
+    return () => observer.disconnect();
+  }, [
+    dispatch,
+    pagination.hasMore,
+    pagination.currentPage,
+    pagination.pageSize,
+    filters,
+    isLoading,
+    isLoadingMore,
+  ]);
 
-  const handleLoadMore = useCallback(() => {
-    if (pagination.hasMore && !isLoadingMore) {
-      dispatch(
-        fetchMorePokemon({
-          page: pagination.currentPage + 1,
-          page_size: pagination.pageSize,
-          types: filters.types.join(',') || undefined,
-          sort_by: filters.sortBy,
-          sort_order: filters.sortOrder,
-        })
-      );
-    }
-  }, [dispatch, pagination, filters, isLoadingMore]);
+  const handleTypeSelect = (type: string) => {
+    const newTypes = selectedTypes.includes(type)
+      ? selectedTypes.filter((t) => t !== type)
+      : selectedTypes.length < 2
+      ? [...selectedTypes, type]
+      : selectedTypes;
 
-  const handleTypeToggle = (type: string) => {
-    let newTypes: string[];
-    if (selectedTypes.includes(type)) {
-      newTypes = selectedTypes.filter((t) => t !== type);
-    } else {
-      if (selectedTypes.length >= 2) {
-        // Replace the first type if already 2 selected
-        newTypes = [selectedTypes[1], type];
-      } else {
-        newTypes = [...selectedTypes, type];
-      }
-    }
+    setSelectedTypes(newTypes);
+    dispatch(setTypeFilter(newTypes));
+  };
+
+  const handleRemoveType = (type: string) => {
+    const newTypes = selectedTypes.filter((t) => t !== type);
     setSelectedTypes(newTypes);
     dispatch(setTypeFilter(newTypes));
   };
 
   const handleSortChange = (event: any) => {
-    const value = event.target.value;
-    dispatch(setSortBy(value || 'id'));
+    dispatch(setSortBy(event.target.value));
   };
 
   const handleSortOrderChange = (order: 'asc' | 'desc') => {
     dispatch(setSortOrder(order));
+  };
+
+  const handleCapturedFilterChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    dispatch(setCapturedFilter(event.target.checked));
   };
 
   const handleClearFilters = () => {
@@ -213,74 +233,101 @@ const Pokedex: React.FC = () => {
     dispatch(clearFilters());
   };
 
-  const handleViewDetails = (pokemon: PokemonBasic) => {
-    navigate(`/pokemon/${pokemon.id}`);
-  };
-
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
   };
 
-  const handleBackToDashboard = () => {
-    navigate('/dashboard');
+  const handleViewDetails = (pokemon: PokemonBasic) => {
+    setSelectedPokemonId(pokemon.id);
+    setModalOpen(true);
   };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setSelectedPokemonId(null);
+  };
+
+  if (error) {
+    return (
+      <PokedexContainer>
+        <Container maxWidth="lg">
+          <Alert severity="error" sx={{ mt: 4 }}>
+            {error}
+          </Alert>
+        </Container>
+      </PokedexContainer>
+    );
+  }
 
   return (
     <PokedexContainer>
-      <Container maxWidth="xl" sx={{ py: 3 }}>
+      <Container maxWidth="lg">
         <Header>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton
-              onClick={handleBackToDashboard}
-              sx={{
-                color: '#fff',
-                border: '2px solid #fff',
-                borderRadius: 0,
-                '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-              }}
-            >
-              <Icon icon="game-icons:return-arrow" width="24" height="24" />
-            </IconButton>
-            <Title>Pokédex</Title>
+          <Title>Pokédex</Title>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <PixelButton onClick={() => navigate('/dashboard')} size="small">
+              Dashboard
+            </PixelButton>
+            <PixelButton onClick={handleLogout} pixelColor="#666" size="small">
+              Logout
+            </PixelButton>
           </Box>
-          <PixelButton onClick={handleLogout} pixelColor="#666" size="small">
-            Logout
-          </PixelButton>
         </Header>
 
         {/* Filters */}
         <FilterCard>
           <FilterTitle>Filters & Sorting</FilterTitle>
 
-          {error && (
-            <Alert
-              severity="error"
-              onClose={() => dispatch(clearError())}
-              sx={{ mb: 2, borderRadius: 0, border: '2px solid currentColor' }}
-            >
-              {error}
-            </Alert>
-          )}
-
-          {/* Type Filters */}
+          {/* Captured Filter */}
           <Box sx={{ mb: 3 }}>
-            <Typography
-              sx={{
-                fontFamily: '"Roboto Mono", monospace',
-                fontSize: '0.875rem',
-                mb: 1,
-                fontWeight: 'bold',
-              }}
-            >
-              Types (Max 2):
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <CapturedLabel
+              control={
+                <StyledCheckbox
+                  checked={filters.capturedOnly}
+                  onChange={handleCapturedFilterChange}
+                />
+              }
+              label="Show only captured Pokémon"
+            />
+          </Box>
+
+          {/* Type Filter */}
+          <Box sx={{ mb: 3 }}>
+            <FilterTitle sx={{ fontSize: '0.75rem' }}>
+              Filter by Type (Max 2)
+            </FilterTitle>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 2 }}>
               {availableTypes.map((type) => (
+                <PixelButton
+                  key={type}
+                  size="small"
+                  onClick={() => handleTypeSelect(type)}
+                  pixelColor={
+                    selectedTypes.includes(type) ? '#4CAF50' : '#999'
+                  }
+                  disabled={
+                    !selectedTypes.includes(type) && selectedTypes.length >= 2
+                  }
+                  sx={{ 
+                    textTransform: 'capitalize',
+                    fontSize: '0.7rem',
+                    padding: '6px 10px',
+                    minWidth: 'auto',
+                  }}
+                >
+                  {type}
+                </PixelButton>
+              ))}
+            </Box>
+
+            {/* Selected Types */}
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {selectedTypes.map((type) => (
                 <Chip
                   key={type}
                   label={type}
-                  onClick={() => handleTypeToggle(type)}
+                  onDelete={() => handleRemoveType(type)}
                   color={selectedTypes.includes(type) ? 'primary' : 'default'}
                   sx={{
                     fontFamily: '"Roboto Mono", monospace',
@@ -295,8 +342,8 @@ const Pokedex: React.FC = () => {
           </Box>
 
           {/* Sort Controls */}
-          <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '0 1 30%' } }}>
               <StyledFormControl fullWidth size="small">
                 <InputLabel>Sort By</InputLabel>
                 <Select
@@ -311,9 +358,9 @@ const Pokedex: React.FC = () => {
                   <MenuItem value="stats_total">Total Stats</MenuItem>
                 </Select>
               </StyledFormControl>
-            </Grid>
+            </Box>
 
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '0 1 30%' } }}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <PixelButton
                   size="small"
@@ -330,9 +377,9 @@ const Pokedex: React.FC = () => {
                   Desc
                 </PixelButton>
               </Box>
-            </Grid>
+            </Box>
 
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Box sx={{ flex: { xs: '1 1 100%', md: '0 1 30%' } }}>
               <PixelButton
                 fullWidth
                 size="small"
@@ -341,8 +388,8 @@ const Pokedex: React.FC = () => {
               >
                 Clear Filters
               </PixelButton>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
 
           {/* Stats */}
           <Box sx={{ mt: 2, p: 1, backgroundColor: 'rgba(0,0,0,0.05)' }}>
@@ -354,6 +401,7 @@ const Pokedex: React.FC = () => {
               }}
             >
               Showing {list.length} of {pagination.total} Pokémon
+              {filters.capturedOnly && ' (Captured only)'}
             </Typography>
           </Box>
         </FilterCard>
@@ -374,18 +422,60 @@ const Pokedex: React.FC = () => {
               </Typography>
             </Box>
           </LoadingContainer>
+        ) : list.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Icon 
+              icon="game-icons:pokecog" 
+              width={80} 
+              height={80}
+              style={{ color: '#ccc', marginBottom: '16px' }}
+            />
+            <Typography
+              sx={{
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: '0.875rem',
+                color: 'text.secondary',
+                mb: 2,
+              }}
+            >
+              {filters.capturedOnly 
+                ? 'No Captured Pokémon Yet!'
+                : 'No Pokémon Found'}
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: '"Roboto Mono", monospace',
+                fontSize: '0.875rem',
+                color: 'text.secondary',
+              }}
+            >
+              {filters.capturedOnly 
+                ? 'Start capturing Pokémon to build your collection!'
+                : 'Try adjusting your filters'}
+            </Typography>
+          </Box>
         ) : (
           <>
-            <Grid container spacing={3}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, 1fr)',
+                  md: 'repeat(3, 1fr)',
+                  lg: 'repeat(4, 1fr)',
+                },
+                gap: 3,
+              }}
+            >
               {list.map((pokemon) => (
-                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={pokemon.id}>
-                  <PokemonCard
-                    pokemon={pokemon}
-                    onViewDetails={handleViewDetails}
-                  />
-                </Grid>
+                <PokemonCard
+                  key={pokemon.id}
+                  pokemon={pokemon}
+                  onViewDetails={handleViewDetails}
+                />
               ))}
-            </Grid>
+            </Box>
 
             {/* Infinite Scroll Trigger */}
             <Box ref={observerTarget} sx={{ height: '50px', mt: 4 }}>
@@ -412,6 +502,13 @@ const Pokedex: React.FC = () => {
           </>
         )}
       </Container>
+
+      {/* Pokemon Detail Modal */}
+      <PokemonDetailModal
+        pokemonId={selectedPokemonId}
+        open={modalOpen}
+        onClose={handleCloseModal}
+      />
     </PokedexContainer>
   );
 };
