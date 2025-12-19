@@ -1,12 +1,73 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Container } from '@mui/material';
+import { Icon } from '@iconify/react';
 import { styled } from '@mui/material/styles';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../features/auth/authSlice';
 import PixelCard from '../common/PixelCard';
 import PixelButton from '../common/PixelButton';
 import { animations } from '../../styles/animations';
+
+// Pokémon quotes from games and series
+const POKEMON_QUOTES = [
+  {
+    quote: "A Pokémon Trainer must have vision, strategy, and compassion for their Pokémon.",
+    author: "Professor Oak"
+  },
+  {
+    quote: "The most important thing is the bond between Pokémon and Trainer.",
+    author: "Lance"
+  },
+  {
+    quote: "Strong Pokémon. Weak Pokémon. That is only the selfish perception of people.",
+    author: "Karen"
+  },
+  {
+    quote: "Technology is incredible! You can store Pokémon in a PC!",
+    author: "Bill"
+  },
+  {
+    quote: "Do you know what's so special about Pokémon? You can always rely on them.",
+    author: "Professor Elm"
+  },
+  {
+    quote: "Pokémon battles are about bringing out the best in each other!",
+    author: "Korrina"
+  },
+  {
+    quote: "When you have a dream, you've got to grab it and never let go.",
+    author: "Professor Kukui"
+  },
+  {
+    quote: "The bond you share with your Pokémon is marvelous!",
+    author: "Cynthia"
+  },
+  {
+    quote: "Pokemon are living beings! They think, they feel, they laugh, they cry!",
+    author: "Mewtwo"
+  },
+  {
+    quote: "The important thing is not how long you live. It's what you accomplish with your life.",
+    author: "Grovyle"
+  },
+  {
+    quote: "We do have a lot in common. The same earth, the same air, the same sky.",
+    author: "Mewtwo"
+  },
+  {
+    quote: "There's no sense in going out of your way just to get somebody to like you.",
+    author: "Ash Ketchum"
+  },
+  {
+    quote: "Knowing what's right doesn't mean much unless you do what's right.",
+    author: "N"
+  },
+  {
+    quote: "Even if we can't understand each other, that's not a reason to reject each other.",
+    author: "Ash Ketchum"
+  }
+];
 
 const DashboardContainer = styled(Box)(({ theme }) => ({
   minHeight: '100vh',
@@ -83,6 +144,12 @@ const Dashboard: React.FC = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
 
+  // Select a random quote on component mount
+  const randomQuote = useMemo(() => {
+    const randomIndex = Math.floor(Math.random() * POKEMON_QUOTES.length);
+    return POKEMON_QUOTES[randomIndex];
+  }, []); // Empty dependency array means this only runs once on mount
+
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
@@ -112,18 +179,8 @@ const Dashboard: React.FC = () => {
               marginBottom: 3,
             }}
           >
-            Welcome, Trainer!
+            Welcome, {user?.trainer_id}!
           </Typography>
-
-          <InfoText>
-            You have successfully logged into your Pokédex system. Your journey begins now!
-          </InfoText>
-
-          <TrainerIdBox>
-            <TrainerIdText>
-              Trainer ID: {user?.trainer_id}
-            </TrainerIdText>
-          </TrainerIdBox>
 
           <InfoText>
             ▸ This is your personal Pokédex dashboard<br />
@@ -133,13 +190,13 @@ const Dashboard: React.FC = () => {
           </InfoText>
 
           <Box sx={{ mt: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <PixelButton pixelColor="#4CAF50">
+            <PixelButton pixelColor="#4CAF50" startIcon={<Icon icon="game-icons:perspective-dice-six" width="16" height="16" />}>
               View Pokédex
             </PixelButton>
-            <PixelButton pixelColor="#FF9800">
+            <PixelButton pixelColor="#FF9800" startIcon={<Icon icon="game-icons:swords-emblem" width="16" height="16" />}>
               My Team
             </PixelButton>
-            <PixelButton pixelColor="#9C27B0">
+            <PixelButton pixelColor="#9C27B0" startIcon={<Icon icon="game-icons:targeting" width="16" height="16" />}>
               Catch Pokémon
             </PixelButton>
           </Box>
@@ -182,8 +239,8 @@ const Dashboard: React.FC = () => {
                 textAlign: 'center',
               }}
             >
-              "A Pokémon Trainer must have vision, strategy, and compassion for their Pokémon."
-              <br />- Professor Oak
+              "{randomQuote.quote}"
+              <br />- {randomQuote.author}
             </Typography>
           </Box>
         </PixelCard>
