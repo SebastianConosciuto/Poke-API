@@ -8,6 +8,7 @@ import pokedexTheme from './styles/theme';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/layout/Dashboard';
+import Pokedex from './components/pokemon/Pokedex';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function App() {
@@ -27,6 +28,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pokedex"
+              element={
+                <ProtectedRoute>
+                  <Pokedex />
                 </ProtectedRoute>
               }
             />

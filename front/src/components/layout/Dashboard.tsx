@@ -123,22 +123,6 @@ const InfoText = styled(Typography)(({ theme }) => ({
   lineHeight: 1.8,
 }));
 
-const TrainerIdBox = styled(Box)(({ theme }) => ({
-  backgroundColor: 'rgba(220, 10, 45, 0.1)',
-  border: '3px solid',
-  borderColor: theme.palette.primary.main,
-  padding: theme.spacing(2),
-  marginTop: theme.spacing(2),
-  marginBottom: theme.spacing(3),
-}));
-
-const TrainerIdText = styled(Typography)(({ theme }) => ({
-  fontFamily: '"Press Start 2P", monospace',
-  fontSize: '0.875rem',
-  color: theme.palette.primary.main,
-  textAlign: 'center',
-}));
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -148,7 +132,7 @@ const Dashboard: React.FC = () => {
   const randomQuote = useMemo(() => {
     const randomIndex = Math.floor(Math.random() * POKEMON_QUOTES.length);
     return POKEMON_QUOTES[randomIndex];
-  }, []); // Empty dependency array means this only runs once on mount
+  }, []);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -190,7 +174,11 @@ const Dashboard: React.FC = () => {
           </InfoText>
 
           <Box sx={{ mt: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <PixelButton pixelColor="#4CAF50" startIcon={<Icon icon="game-icons:perspective-dice-six" width="16" height="16" />}>
+            <PixelButton 
+              pixelColor="#4CAF50" 
+              startIcon={<Icon icon="game-icons:perspective-dice-six" width="16" height="16" />}
+              onClick={() => navigate('/pokedex')}
+            >
               View Pokédex
             </PixelButton>
             <PixelButton pixelColor="#FF9800" startIcon={<Icon icon="game-icons:swords-emblem" width="16" height="16" />}>
