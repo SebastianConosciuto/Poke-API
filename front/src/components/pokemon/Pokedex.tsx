@@ -13,8 +13,6 @@ import {
   CircularProgress,
   Alert,
   IconButton,
-  Checkbox,
-  FormControlLabel,
 } from '@mui/material';
 import { Icon } from '@iconify/react';
 import { styled } from '@mui/material/styles';
@@ -26,7 +24,6 @@ import {
   setTypeFilter,
   setSortBy,
   setSortOrder,
-  setCapturedOnly,
   clearFilters,
   clearError,
 } from '../../features/pokemon/pokemonSlice';
@@ -141,7 +138,6 @@ const Pokedex: React.FC = () => {
         types: filters.types.join(',') || undefined,
         sort_by: filters.sortBy,
         sort_order: filters.sortOrder,
-        captured_only: filters.capturedOnly,
       })
     );
   }, [dispatch, filters]);
@@ -182,7 +178,6 @@ const Pokedex: React.FC = () => {
           types: filters.types.join(',') || undefined,
           sort_by: filters.sortBy,
           sort_order: filters.sortOrder,
-          captured_only: filters.capturedOnly,
         })
       );
     }
@@ -299,34 +294,6 @@ const Pokedex: React.FC = () => {
             </Box>
           </Box>
 
-          {/* Captured Filter */}
-          <Box sx={{ mb: 3 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={filters.capturedOnly}
-                  onChange={(e) => dispatch(setCapturedOnly(e.target.checked))}
-                  sx={{
-                    color: 'primary.main',
-                    '&.Mui-checked': {
-                      color: 'primary.main',
-                    },
-                  }}
-                />
-              }
-              label={
-                <Typography
-                  sx={{
-                    fontFamily: '"Roboto Mono", monospace',
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  Show Only Captured
-                </Typography>
-              }
-            />
-          </Box>
-
           {/* Sort Controls */}
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
@@ -337,7 +304,6 @@ const Pokedex: React.FC = () => {
                   onChange={handleSortChange}
                   label="Sort By"
                 >
-                  <MenuItem value="">None</MenuItem>
                   <MenuItem value="id">ID</MenuItem>
                   <MenuItem value="name">Name</MenuItem>
                   <MenuItem value="height">Height</MenuItem>

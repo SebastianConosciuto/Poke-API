@@ -13,7 +13,6 @@ export interface PokemonBasic {
   height: number;
   weight: number;
   stats_total: number;
-  is_captured: boolean;
 }
 
 export interface PokemonStat {
@@ -49,7 +48,6 @@ export interface PokemonListParams {
   types?: string;  // Comma-separated type names
   sort_by?: 'id' | 'name' | 'height' | 'weight' | 'stats_total';
   sort_order?: 'asc' | 'desc';
-  captured_only?: boolean;
 }
 
 export const pokemonService = {
@@ -66,13 +64,5 @@ export const pokemonService = {
   getDetail: async (pokemonId: number): Promise<PokemonDetail> => {
     const response = await api.get(`/pokemon/${pokemonId}`);
     return response.data;
-  },
-
-  capture: async (pokemonId: number): Promise<void> => {
-    await api.post(`/pokemon/${pokemonId}/capture`);
-  },
-
-  release: async (pokemonId: number): Promise<void> => {
-    await api.delete(`/pokemon/${pokemonId}/capture`);
   },
 };

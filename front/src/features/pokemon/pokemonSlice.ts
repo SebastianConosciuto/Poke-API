@@ -15,7 +15,6 @@ interface PokemonState {
     types: string[];
     sortBy: 'id' | 'name' | 'height' | 'weight' | 'stats_total';
     sortOrder: 'asc' | 'desc';
-    capturedOnly: boolean;
   };
   pagination: {
     currentPage: number;
@@ -37,7 +36,6 @@ const initialState: PokemonState = {
     types: [],
     sortBy: 'id',
     sortOrder: 'asc',
-    capturedOnly: false,
   },
   pagination: {
     currentPage: 1,
@@ -104,34 +102,6 @@ export const fetchPokemonDetail = createAsyncThunk(
   }
 );
 
-export const capturePokemon = createAsyncThunk(
-  'pokemon/capture',
-  async (pokemonId: number, { rejectWithValue }) => {
-    try {
-      await pokemonService.capture(pokemonId);
-      return pokemonId;
-    } catch (error: any) {
-      return rejectWithValue(
-        error.response?.data?.detail || 'Failed to capture Pokemon'
-      );
-    }
-  }
-);
-
-export const releasePokemon = createAsyncThunk(
-  'pokemon/release',
-  async (pokemonId: number, { rejectWithValue }) => {
-    try {
-      await pokemonService.release(pokemonId);
-      return pokemonId;
-    } catch (error: any) {
-      return rejectWithValue(
-        error.response?.data?.detail || 'Failed to release Pokemon'
-      );
-    }
-  }
-);
-
 const pokemonSlice = createSlice({
   name: 'pokemon',
   initialState,
@@ -151,11 +121,6 @@ const pokemonSlice = createSlice({
     },
     setSortOrder: (state, action: PayloadAction<'asc' | 'desc'>) => {
       state.filters.sortOrder = action.payload;
-      state.list = [];
-      state.pagination.currentPage = 1;
-    },
-    setCapturedOnly: (state, action: PayloadAction<boolean>) => {
-      state.filters.capturedOnly = action.payload;
       state.list = [];
       state.pagination.currentPage = 1;
     },
@@ -234,28 +199,6 @@ const pokemonSlice = createSlice({
       .addCase(fetchPokemonDetail.rejected, (state, action) => {
         state.isLoadingDetail = false;
         state.error = action.payload as string;
-      })
-      // Capture Pokemon
-      .addCase(capturePokemon.fulfilled, (state, action) => {
-        // Update the list to mark Pokemon as captured
-        const pokemon = state.list.find(p => p.id === action.payload);
-        if (pokemon) {
-          pokemon.is_captured = true;
-        }
-      })
-      .addCase(capturePokemon.rejected, (state, action) => {
-        state.error = action.payload as string;
-      })
-      // Release Pokemon
-      .addCase(releasePokemon.fulfilled, (state, action) => {
-        // Update the list to mark Pokemon as not captured
-        const pokemon = state.list.find(p => p.id === action.payload);
-        if (pokemon) {
-          pokemon.is_captured = false;
-        }
-      })
-      .addCase(releasePokemon.rejected, (state, action) => {
-        state.error = action.payload as string;
       });
   },
 });
@@ -264,7 +207,6 @@ export const {
   setTypeFilter,
   setSortBy,
   setSortOrder,
-  setCapturedOnly,
   clearFilters,
   clearError,
   clearCurrentPokemon,
