@@ -273,6 +273,8 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
                   />
                 </Box>
 
+                
+
                 <Section>
                   <SectionTitle>Types</SectionTitle>
                   <Box>
@@ -315,6 +317,15 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
 
               {/* Right Column - Stats */}
               <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 55%' } }}>
+                {/* Description Section - NEW */}
+                {currentPokemon.description && (
+                  <Section>
+                    <SectionTitle>Pokédex Entry</SectionTitle>
+                    <InfoText sx={{ fontStyle: 'italic', lineHeight: 1.6 }}>
+                      "{currentPokemon.description}"
+                    </InfoText>
+                  </Section>
+                )}
                 <Section>
                   <SectionTitle>Base Stats</SectionTitle>
                   {currentPokemon.stats.map((stat) => (
@@ -371,13 +382,6 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
 
                 {/* Action Buttons */}
                 <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
-                  <PixelButton
-                    fullWidth
-                    onClick={handleCapture}
-                    pixelColor={currentPokemon.is_captured ? '#FF5252' : '#4CAF50'}
-                  >
-                    {currentPokemon.is_captured ? 'Release' : 'Capture'}
-                  </PixelButton>
                   <PixelButton fullWidth onClick={handleClose} pixelColor="#666">
                     Close
                   </PixelButton>

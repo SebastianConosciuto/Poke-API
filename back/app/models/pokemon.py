@@ -35,6 +35,7 @@ class PokemonDetail(BaseModel):
     base_experience: Optional[int]
     is_captured: bool = False  # Whether the current user has captured this Pokemon
     nickname: Optional[str] = None  # Custom nickname if captured
+    description: Optional[str] = None  # Pokedex flavor text description
 
 class PokemonListResponse(BaseModel):
     """Response for paginated Pokemon list"""

@@ -34,6 +34,7 @@ export interface PokemonDetail {
   base_experience: number | null;
   is_captured: boolean;  // Whether the user has captured this Pokemon
   nickname: string | null;  // Custom nickname if captured
+  description: string | null;  // Pokedex flavor text description
 }
 
 export interface PokemonListResponse {

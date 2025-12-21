@@ -2,12 +2,13 @@
 """
 Script to populate Supabase database with Pokemon data from PokeAPI
 This only needs to be run once to populate the database
+UPDATED: Now includes Pokemon descriptions from species endpoint
 """
 
 import asyncio
 import httpx
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.database import supabase
 
 POKEAPI_BASE_URL = "https://pokeapi.co/api/v2"
@@ -28,7 +29,31 @@ async def fetch_pokemon_detail(client: httpx.AsyncClient, url: str) -> Dict[str,
     response.raise_for_status()
     return response.json()
 
-def extract_pokemon_data(pokemon_data: Dict[str, Any]) -> Dict[str, Any]:
+async def fetch_pokemon_species(client: httpx.AsyncClient, pokemon_id: int) -> Optional[str]:
+    """Fetch Pokemon species data to get the Pokedex description"""
+    try:
+        url = f"{POKEAPI_BASE_URL}/pokemon-species/{pokemon_id}/"
+        response = await client.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Get English flavor text entries
+        flavor_texts = data.get('flavor_text_entries', [])
+        
+        # Find the first English entry (preferably from a recent game)
+        for entry in flavor_texts:
+            if entry['language']['name'] == 'en':
+                # Clean up the text (remove form feeds and extra spaces)
+                description = entry['flavor_text'].replace('\f', ' ').replace('\n', ' ')
+                description = ' '.join(description.split())  # Normalize whitespace
+                return description
+        
+        return None
+    except Exception as e:
+        print(f"  ⚠️  Could not fetch description for Pokemon {pokemon_id}: {e}")
+        return None
+
+def extract_pokemon_data(pokemon_data: Dict[str, Any], description: Optional[str] = None) -> Dict[str, Any]:
     """Extract and format Pokemon data for database insertion"""
     # Extract stats
     stats = {stat['stat']['name']: stat['base_stat'] for stat in pokemon_data['stats']}
@@ -71,23 +96,32 @@ def extract_pokemon_data(pokemon_data: Dict[str, Any]) -> Dict[str, Any]:
         'stats_total': stats_total,
         'types': types,
         'abilities': json.dumps(abilities),
-        'sprites': json.dumps(sprites)
+        'sprites': json.dumps(sprites),
+        'description': description,  # NEW: Add description
     }
 
 async def process_batch(client: httpx.AsyncClient, pokemon_list: List[Dict]) -> List[Dict[str, Any]]:
     """Process a batch of Pokemon concurrently"""
-    tasks = [fetch_pokemon_detail(client, pokemon['url']) for pokemon in pokemon_list]
+    tasks = []
+    for pokemon in pokemon_list:
+        tasks.append(fetch_pokemon_detail(client, pokemon['url']))
+    
     pokemon_details = await asyncio.gather(*tasks, return_exceptions=True)
     
     processed = []
-    for pokemon_data in pokemon_details:
+    for i, pokemon_data in enumerate(pokemon_details):
         if isinstance(pokemon_data, Exception):
-            print(f"Error fetching Pokemon: {pokemon_data}")
+            print(f"  ⚠️  Error fetching Pokemon: {pokemon_data}")
             continue
         try:
-            processed.append(extract_pokemon_data(pokemon_data))
+            # Fetch the description from species endpoint
+            pokemon_id = pokemon_data['id']
+            description = await fetch_pokemon_species(client, pokemon_id)
+            
+            # Extract and add to processed list
+            processed.append(extract_pokemon_data(pokemon_data, description))
         except Exception as e:
-            print(f"Error processing Pokemon {pokemon_data.get('name', 'unknown')}: {e}")
+            print(f"  ⚠️  Error processing Pokemon {pokemon_data.get('name', 'unknown')}: {e}")
     
     return processed
 
@@ -100,7 +134,7 @@ def insert_pokemon_batch(pokemon_batch: List[Dict[str, Any]]) -> int:
         response = supabase.table("pokemon").upsert(pokemon_batch).execute()
         return len(pokemon_batch)
     except Exception as e:
-        print(f"Error inserting batch: {e}")
+        print(f"  ⚠️  Error inserting batch: {e}")
         # Try inserting one by one if batch fails
         success_count = 0
         for pokemon in pokemon_batch:
@@ -108,7 +142,7 @@ def insert_pokemon_batch(pokemon_batch: List[Dict[str, Any]]) -> int:
                 supabase.table("pokemon").upsert(pokemon).execute()
                 success_count += 1
             except Exception as e2:
-                print(f"Error inserting {pokemon['name']}: {e2}")
+                print(f"    ⚠️  Error inserting {pokemon['name']}: {e2}")
         return success_count
 
 async def populate_database():
@@ -128,7 +162,7 @@ async def populate_database():
             try:
                 pokemon_list = await fetch_pokemon_list(client, limit, offset)
             except Exception as e:
-                print(f"Error fetching Pokemon list: {e}")
+                print(f"  ❌ Error fetching Pokemon list: {e}")
                 break
             
             # Process in smaller batches
@@ -163,7 +197,7 @@ async def populate_database():
         db_count = count_response.count
         print(f"\n✓ Verification: {db_count} Pokemon in database")
     except Exception as e:
-        print(f"\nCouldn't verify count: {e}")
+        print(f"\n⚠️  Couldn't verify count: {e}")
 
 if __name__ == "__main__":
     print("="*60)
@@ -171,8 +205,9 @@ if __name__ == "__main__":
     print("="*60)
     print("\nThis script will:")
     print("1. Fetch all Pokemon from PokeAPI")
-    print("2. Store them in your Supabase database")
-    print("3. This only needs to be run once")
+    print("2. Fetch Pokedex descriptions from species endpoint")
+    print("3. Store them in your Supabase database")
+    print("4. This only needs to be run once")
     print("\nMake sure you have:")
     print("- Created the 'pokemon' table using schema_pokemon.sql")
     print("- Set up your .env file with Supabase credentials")

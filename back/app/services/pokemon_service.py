@@ -3,6 +3,7 @@ Pokemon service - Queries Pokemon data from Supabase database
 Data is pre-populated from PokeAPI using populate_pokemon.py
 """
 
+import json
 from typing import List, Optional
 from fastapi import HTTPException, status
 from app.database import supabase
@@ -176,19 +177,29 @@ class PokemonService:
                 PokemonStat(name='speed', base_stat=p['stats_speed']),
             ]
             
+            # Parse JSON strings from database
+            sprites = p.get('sprites', {})
+            if isinstance(sprites, str):
+                sprites = json.loads(sprites)
+            
+            abilities = p.get('abilities', [])
+            if isinstance(abilities, str):
+                abilities = json.loads(abilities)
+            
             return PokemonDetail(
                 id=p['id'],
                 name=p['name'],
                 types=p['types'],
-                sprites=p.get('sprites', {}),
+                sprites=sprites,
                 height=p['height'],
                 weight=p['weight'],
                 stats=stats,
                 stats_total=p['stats_total'],
-                abilities=p.get('abilities', []),
+                abilities=abilities,
                 base_experience=p.get('base_experience'),
                 is_captured=is_captured,
-                nickname=nickname
+                nickname=nickname,
+                description=p.get('description')  # Add description from database
             )
             
         except Exception as e:

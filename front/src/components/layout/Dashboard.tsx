@@ -143,7 +143,7 @@ const Dashboard: React.FC = () => {
     <DashboardContainer>
       <Container maxWidth="lg">
         <Header>
-          <Title>Pokédex Dashboard</Title>
+          <Title>Pokedash</Title>
           <PixelButton 
             onClick={handleLogout}
             pixelColor="#666"
@@ -179,13 +179,13 @@ const Dashboard: React.FC = () => {
               startIcon={<Icon icon="game-icons:perspective-dice-six" width="16" height="16" />}
               onClick={() => navigate('/pokedex')}
             >
-              View Pokédex
+              View Pokedex
             </PixelButton>
             <PixelButton pixelColor="#FF9800" startIcon={<Icon icon="game-icons:swords-emblem" width="16" height="16" />}>
               My Team
             </PixelButton>
             <PixelButton pixelColor="#9C27B0" startIcon={<Icon icon="game-icons:targeting" width="16" height="16" />}>
-              Catch Pokémon
+              Catch Pokemon
             </PixelButton>
           </Box>
         </WelcomeCard>
