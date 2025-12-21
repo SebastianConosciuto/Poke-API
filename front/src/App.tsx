@@ -9,6 +9,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/layout/Dashboard';
 import Pokedex from './components/pokemon/Pokedex';
+import CatchPokemon from './components/catch/CatchPokemon';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function App() {
@@ -36,6 +37,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Pokedex />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/catch"
+              element={
+                <ProtectedRoute>
+                  <CatchPokemon />
                 </ProtectedRoute>
               }
             />

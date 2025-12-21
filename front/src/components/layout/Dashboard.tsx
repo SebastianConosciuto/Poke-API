@@ -181,10 +181,17 @@ const Dashboard: React.FC = () => {
             >
               View Pokedex
             </PixelButton>
-            <PixelButton pixelColor="#FF9800" startIcon={<Icon icon="game-icons:swords-emblem" width="16" height="16" />}>
+            <PixelButton 
+              pixelColor="#FF9800" 
+              startIcon={<Icon icon="game-icons:swords-emblem" width="16" height="16" />}
+            >
               My Team
             </PixelButton>
-            <PixelButton pixelColor="#9C27B0" startIcon={<Icon icon="game-icons:targeting" width="16" height="16" />}>
+            <PixelButton 
+              pixelColor="#9C27B0" 
+              startIcon={<Icon icon="game-icons:targeting" width="16" height="16" />}
+              onClick={() => navigate('/catch')}
+            >
               Catch Pokemon
             </PixelButton>
           </Box>

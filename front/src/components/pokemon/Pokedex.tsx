@@ -1,53 +1,65 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Container,
   Typography,
-  Select,
-  MenuItem,
+  Container,
   FormControl,
   InputLabel,
-  Chip,
+  Select,
+  MenuItem,
+  Checkbox,
+  FormControlLabel,
   CircularProgress,
   Alert,
-  FormControlLabel,
-  Checkbox,
 } from '@mui/material';
 import { Icon } from '@iconify/react';
 import { styled } from '@mui/material/styles';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
-  fetchTypes,
   fetchPokemonList,
   fetchMorePokemon,
+  fetchTypes,
+  fetchRegions,
+  fetchHabitats,
   setTypeFilter,
   setSortBy,
   setSortOrder,
   setCapturedFilter,
+  setRegionFilter,
+  setHabitatFilter,
+  setDifficultyFilter,
   clearFilters,
 } from '../../features/pokemon/pokemonSlice';
 import { logout } from '../../features/auth/authSlice';
+import type { PokemonBasic } from '../../services/pokemonService';
+import PixelCard from '../common/PixelCard';
+import PixelButton from '../common/PixelButton';
 import PokemonCard from './PokemonCard';
 import PokemonDetailModal from './PokemonDetailModal';
-import PixelButton from '../common/PixelButton';
-import PixelCard from '../common/PixelCard';
-import type { PokemonBasic } from '../../services/pokemonService';
 import { animations } from '../../styles/animations';
 
-const PokedexContainer = styled(Box)({
+const PokedexContainer = styled(Box)(({ theme }) => ({
   minHeight: '100vh',
-  backgroundColor: '#E3F2FD',
+  backgroundColor: '#E8F5E9',
   backgroundImage: `
     repeating-linear-gradient(
-      45deg,
+      90deg,
       transparent,
-      transparent 40px,
-      rgba(0, 0, 0, 0.02) 40px,
-      rgba(0, 0, 0, 0.02) 80px
+      transparent 20px,
+      rgba(0, 0, 0, 0.02) 20px,
+      rgba(0, 0, 0, 0.02) 40px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 20px,
+      rgba(0, 0, 0, 0.02) 20px,
+      rgba(0, 0, 0, 0.02) 40px
     )
   `,
-});
+  padding: theme.spacing(4),
+}));
 
 const Header = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
@@ -58,8 +70,7 @@ const Header = styled(Box)(({ theme }) => ({
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: theme.spacing(2),
+  animation: `${animations.slideIn} 0.5s ease-out`,
 }));
 
 const Title = styled(Typography)(({ theme }) => ({
@@ -100,6 +111,14 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
       transform: 'translate(14px, -12px) scale(0.75)',
     },
   },
+  '& .MuiSelect-select': {
+    fontFamily: '"Roboto Mono", monospace',
+    fontSize: '0.875rem',
+  },
+  '& .MuiMenuItem-root': {
+    fontFamily: '"Roboto Mono", monospace',
+    fontSize: '0.8rem',
+  },
 }));
 
 const StyledCheckbox = styled(Checkbox)(({ theme }) => ({
@@ -122,12 +141,24 @@ const LoadingContainer = styled(Box)({
   minHeight: '400px',
 });
 
+// Difficulty ranges matching the catch minigame
+const DIFFICULTY_RANGES = [
+  { value: 'weak', label: '180-300 (Weak)', min: 180, max: 300 },
+  { value: 'easy', label: '301-400 (Easy)', min: 301, max: 400 },
+  { value: 'medium', label: '401-500 (Medium)', min: 401, max: 500 },
+  { value: 'hard', label: '501-600 (Hard)', min: 501, max: 600 },
+  { value: 'legendary', label: '601-720 (Legendary)', min: 601, max: 720 },
+  { value: 'mythical', label: '721+ (Mythical)', min: 721, max: 9999 },
+];
+
 const Pokedex: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const {
     list,
     availableTypes,
+    availableRegions,
+    availableHabitats,
     filters,
     pagination,
     isLoading,
@@ -140,9 +171,11 @@ const Pokedex: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
 
-  // Fetch types on mount
+  // Fetch types, regions, and habitats on mount
   useEffect(() => {
     dispatch(fetchTypes());
+    dispatch(fetchRegions());
+    dispatch(fetchHabitats());
   }, [dispatch]);
 
   // Fetch initial Pokemon list
@@ -152,6 +185,9 @@ const Pokedex: React.FC = () => {
         page: 1,
         page_size: 20,
         types: filters.types.join(',') || undefined,
+        region: filters.region || undefined,
+        habitat: filters.habitat || undefined,
+        difficulty: filters.difficulty || undefined,
         sort_by: filters.sortBy,
         sort_order: filters.sortOrder,
         captured_only: filters.capturedOnly,
@@ -174,6 +210,9 @@ const Pokedex: React.FC = () => {
               page: pagination.currentPage + 1,
               page_size: pagination.pageSize,
               types: filters.types.join(',') || undefined,
+              region: filters.region || undefined,
+              habitat: filters.habitat || undefined,
+              difficulty: filters.difficulty || undefined,
               sort_by: filters.sortBy,
               sort_order: filters.sortOrder,
               captured_only: filters.capturedOnly,
@@ -214,6 +253,18 @@ const Pokedex: React.FC = () => {
     const newTypes = selectedTypes.filter((t) => t !== type);
     setSelectedTypes(newTypes);
     dispatch(setTypeFilter(newTypes));
+  };
+
+  const handleRegionChange = (event: any) => {
+    dispatch(setRegionFilter(event.target.value));
+  };
+
+  const handleHabitatChange = (event: any) => {
+    dispatch(setHabitatFilter(event.target.value));
+  };
+
+  const handleDifficultyChange = (event: any) => {
+    dispatch(setDifficultyFilter(event.target.value));
   };
 
   const handleSortChange = (event: any) => {
@@ -292,6 +343,72 @@ const Pokedex: React.FC = () => {
             />
           </Box>
 
+          {/* Region, Habitat, Difficulty Filters */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+            {/* Region Filter */}
+            <Box sx={{ flex: '1 1 calc(33.333% - 16px)', minWidth: '200px' }}>
+              <StyledFormControl fullWidth size="small">
+                <InputLabel>Region</InputLabel>
+                <Select
+                  value={filters.region || ''}
+                  onChange={handleRegionChange}
+                  label="Region"
+                >
+                  <MenuItem value="">
+                    <em>All Regions</em>
+                  </MenuItem>
+                  {availableRegions.map((region) => (
+                    <MenuItem key={region} value={region}>
+                      {region.charAt(0).toUpperCase() + region.slice(1)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </StyledFormControl>
+            </Box>
+
+            {/* Habitat Filter */}
+            <Box sx={{ flex: '1 1 calc(33.333% - 16px)', minWidth: '200px' }}>
+              <StyledFormControl fullWidth size="small">
+                <InputLabel>Habitat</InputLabel>
+                <Select
+                  value={filters.habitat || ''}
+                  onChange={handleHabitatChange}
+                  label="Habitat"
+                >
+                  <MenuItem value="">
+                    <em>All Habitats</em>
+                  </MenuItem>
+                  {availableHabitats.map((habitat) => (
+                    <MenuItem key={habitat} value={habitat}>
+                      {habitat.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </StyledFormControl>
+            </Box>
+
+            {/* Difficulty Filter */}
+            <Box sx={{ flex: '1 1 calc(33.333% - 16px)', minWidth: '200px' }}>
+              <StyledFormControl fullWidth size="small">
+                <InputLabel>Difficulty</InputLabel>
+                <Select
+                  value={filters.difficulty || ''}
+                  onChange={handleDifficultyChange}
+                  label="Difficulty"
+                >
+                  <MenuItem value="">
+                    <em>All Difficulties</em>
+                  </MenuItem>
+                  {DIFFICULTY_RANGES.map((diff) => (
+                    <MenuItem key={diff.value} value={diff.value}>
+                      {diff.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </StyledFormControl>
+            </Box>
+          </Box>
+
           {/* Type Filter */}
           <Box sx={{ mb: 3 }}>
             <FilterTitle sx={{ fontSize: '0.75rem' }}>
@@ -304,63 +421,83 @@ const Pokedex: React.FC = () => {
                   size="small"
                   onClick={() => handleTypeSelect(type)}
                   pixelColor={
-                    selectedTypes.includes(type) ? '#4CAF50' : '#999'
+                    selectedTypes.includes(type)
+                      ? '#4CAF50'
+                      : '#999'
                   }
                   disabled={
                     !selectedTypes.includes(type) && selectedTypes.length >= 2
                   }
-                  sx={{ 
-                    textTransform: 'capitalize',
-                    fontSize: '0.7rem',
-                    padding: '6px 10px',
-                    minWidth: 'auto',
-                  }}
                 >
                   {type}
                 </PixelButton>
               ))}
             </Box>
-
-            {/* Selected Types */}
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {selectedTypes.map((type) => (
-                <Chip
-                  key={type}
-                  label={type}
-                  onDelete={() => handleRemoveType(type)}
-                  color={selectedTypes.includes(type) ? 'primary' : 'default'}
-                  sx={{
-                    fontFamily: '"Roboto Mono", monospace',
-                    fontSize: '0.75rem',
-                    textTransform: 'capitalize',
-                    borderRadius: 0,
-                    border: '2px solid #000',
-                  }}
-                />
-              ))}
-            </Box>
+            {selectedTypes.length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {selectedTypes.map((type) => (
+                  <Box
+                    key={type}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      px: 1.5,
+                      py: 0.5,
+                      backgroundColor: 'primary.main',
+                      color: '#fff',
+                      fontFamily: '"Roboto Mono", monospace',
+                      fontSize: '0.75rem',
+                      border: '2px solid #000',
+                    }}
+                  >
+                    {type}
+                    <Box
+                      component="span"
+                      onClick={() => handleRemoveType(type)}
+                      sx={{
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        ml: 0.5,
+                        '&:hover': { color: '#FF5252' },
+                      }}
+                    >
+                      ×
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
           </Box>
 
           {/* Sort Controls */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '0 1 30%' } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 2,
+              alignItems: 'flex-end',
+            }}
+          >
+            <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 35%' } }}>
               <StyledFormControl fullWidth size="small">
                 <InputLabel>Sort By</InputLabel>
                 <Select
-                  value={filters.sortBy || ''}
+                  value={filters.sortBy}
                   onChange={handleSortChange}
                   label="Sort By"
                 >
                   <MenuItem value="id">ID</MenuItem>
                   <MenuItem value="name">Name</MenuItem>
-                  <MenuItem value="height">Height</MenuItem>
-                  <MenuItem value="weight">Weight</MenuItem>
                   <MenuItem value="stats_total">Total Stats</MenuItem>
                 </Select>
               </StyledFormControl>
             </Box>
 
-            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 45%', md: '0 1 30%' } }}>
+            <Box sx={{ flex: { xs: '1 1 100%', md: '0 1 35%' } }}>
+              <FilterTitle sx={{ fontSize: '0.65rem', mb: 0.5 }}>
+                Order
+              </FilterTitle>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <PixelButton
                   size="small"
@@ -402,6 +539,9 @@ const Pokedex: React.FC = () => {
             >
               Showing {list.length} of {pagination.total} Pokémon
               {filters.capturedOnly && ' (Captured only)'}
+              {filters.region && ` • ${filters.region.charAt(0).toUpperCase() + filters.region.slice(1)}`}
+              {filters.habitat && ` • ${filters.habitat.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}`}
+              {filters.difficulty && ` • ${DIFFICULTY_RANGES.find(d => d.value === filters.difficulty)?.label}`}
             </Typography>
           </Box>
         </FilterCard>

@@ -40,10 +40,45 @@ class PokemonService:
             ]
     
     @staticmethod
+    def get_available_regions() -> List[str]:
+        """Get list of available regions from database"""
+        try:
+            response = supabase.table('pokemon').select('region').not_.is_('region', 'null').execute()
+            
+            regions = set()
+            for row in response.data:
+                if row['region']:
+                    regions.add(row['region'])
+            
+            return sorted(list(regions))
+        except Exception as e:
+            print(f"Error fetching regions: {e}")
+            return []
+    
+    @staticmethod
+    def get_available_habitats() -> List[str]:
+        """Get list of available habitats from database"""
+        try:
+            response = supabase.table('pokemon').select('habitat').not_.is_('habitat', 'null').execute()
+            
+            habitats = set()
+            for row in response.data:
+                if row['habitat']:
+                    habitats.add(row['habitat'])
+            
+            return sorted(list(habitats))
+        except Exception as e:
+            print(f"Error fetching habitats: {e}")
+            return []
+    
+    @staticmethod
     async def get_pokemon_list(
         page: int = 1,
         page_size: int = 20,
         types: Optional[List[str]] = None,
+        region: Optional[str] = None,
+        habitat: Optional[str] = None,
+        difficulty: Optional[str] = None,
         sort_by: str = 'id',
         sort_order: str = 'asc',
         trainer_id: Optional[str] = None,
@@ -56,6 +91,9 @@ class PokemonService:
             page: Page number (1-indexed)
             page_size: Number of Pokemon per page (max 50)
             types: List of types to filter by (AND logic)
+            region: Filter by region (kanto, johto, etc.)
+            habitat: Filter by habitat (grassland, forest, etc.)
+            difficulty: Filter by difficulty based on stats (weak, easy, medium, hard, legendary, mythical)
             sort_by: Field to sort by (id, name, height, weight, stats_total)
             sort_order: Sort order (asc or desc)
             trainer_id: Current trainer ID to check captured status
@@ -76,6 +114,29 @@ class PokemonService:
             if types:
                 for pokemon_type in types:
                     query = query.contains('types', [pokemon_type])
+            
+            # Apply region filter
+            if region:
+                query = query.eq('region', region.lower())
+            
+            # Apply habitat filter
+            if habitat:
+                query = query.eq('habitat', habitat.lower())
+            
+            # Apply difficulty filter (stat-based)
+            if difficulty:
+                if difficulty == 'weak':
+                    query = query.gte('stats_total', 180).lte('stats_total', 300)
+                elif difficulty == 'easy':
+                    query = query.gte('stats_total', 301).lte('stats_total', 400)
+                elif difficulty == 'medium':
+                    query = query.gte('stats_total', 401).lte('stats_total', 500)
+                elif difficulty == 'hard':
+                    query = query.gte('stats_total', 501).lte('stats_total', 600)
+                elif difficulty == 'legendary':
+                    query = query.gte('stats_total', 601).lte('stats_total', 720)
+                elif difficulty == 'mythical':
+                    query = query.gte('stats_total', 721)
             
             # If captured_only is True, filter by captured Pokemon
             if captured_only and trainer_id:
@@ -199,7 +260,7 @@ class PokemonService:
                 base_experience=p.get('base_experience'),
                 is_captured=is_captured,
                 nickname=nickname,
-                description=p.get('description')  # Add description from database
+                description=p.get('description')
             )
             
         except Exception as e:
@@ -239,8 +300,7 @@ class PokemonService:
             return {
                 'message': f'Successfully captured {pokemon_name.capitalize()}!',
                 'pokemon_id': pokemon_id,
-                'pokemon_name': pokemon_name,
-                'captured': True
+                'pokemon_name': pokemon_name
             }
             
         except HTTPException:
@@ -256,28 +316,24 @@ class PokemonService:
         """Release a captured Pokemon"""
         try:
             # Check if Pokemon is captured
-            captured = supabase.table('captured_pokemon').select('id').eq('trainer_id', trainer_id).eq('pokemon_id', pokemon_id).execute()
-            if not captured.data:
-                # Get Pokemon name for better error message
-                pokemon_response = supabase.table('pokemon').select('name').eq('id', pokemon_id).execute()
-                pokemon_name = pokemon_response.data[0]['name'] if pokemon_response.data else f"Pokemon #{pokemon_id}"
+            existing = supabase.table('captured_pokemon').select('id').eq('trainer_id', trainer_id).eq('pokemon_id', pokemon_id).execute()
+            if not existing.data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"You haven't captured {pokemon_name.capitalize()} yet"
+                    detail="Pokemon not found in your collection"
                 )
+            
+            # Get Pokemon name
+            pokemon_response = supabase.table('pokemon').select('name').eq('id', pokemon_id).execute()
+            pokemon_name = pokemon_response.data[0]['name'] if pokemon_response.data else "Pokemon"
             
             # Delete capture record
             supabase.table('captured_pokemon').delete().eq('trainer_id', trainer_id).eq('pokemon_id', pokemon_id).execute()
             
-            # Get Pokemon name for response
-            pokemon_response = supabase.table('pokemon').select('name').eq('id', pokemon_id).execute()
-            pokemon_name = pokemon_response.data[0]['name'] if pokemon_response.data else f"Pokemon #{pokemon_id}"
-            
             return {
-                'message': f'Released {pokemon_name.capitalize()}',
+                'message': f'Released {pokemon_name.capitalize()}!',
                 'pokemon_id': pokemon_id,
-                'pokemon_name': pokemon_name,
-                'captured': False
+                'pokemon_name': pokemon_name
             }
             
         except HTTPException:

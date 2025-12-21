@@ -11,11 +11,16 @@ interface PokemonState {
   list: PokemonBasic[];
   currentPokemon: PokemonDetail | null;
   availableTypes: string[];
+  availableRegions: string[];
+  availableHabitats: string[];
   filters: {
     types: string[];
+    region: string | null;
+    habitat: string | null;
+    difficulty: string | null;
     sortBy: 'id' | 'name' | 'height' | 'weight' | 'stats_total';
     sortOrder: 'asc' | 'desc';
-    capturedOnly: boolean;  // New filter for captured Pokemon
+    capturedOnly: boolean;
   };
   pagination: {
     currentPage: number;
@@ -33,8 +38,13 @@ const initialState: PokemonState = {
   list: [],
   currentPokemon: null,
   availableTypes: [],
+  availableRegions: [],
+  availableHabitats: [],
   filters: {
     types: [],
+    region: null,
+    habitat: null,
+    difficulty: null,
     sortBy: 'id',
     sortOrder: 'asc',
     capturedOnly: false,
@@ -60,6 +70,32 @@ export const fetchTypes = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(
         error.response?.data?.detail || 'Failed to fetch types'
+      );
+    }
+  }
+);
+
+export const fetchRegions = createAsyncThunk(
+  'pokemon/fetchRegions',
+  async (_, { rejectWithValue }) => {
+    try {
+      return await pokemonService.getRegions();
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data?.detail || 'Failed to fetch regions'
+      );
+    }
+  }
+);
+
+export const fetchHabitats = createAsyncThunk(
+  'pokemon/fetchHabitats',
+  async (_, { rejectWithValue }) => {
+    try {
+      return await pokemonService.getHabitats();
+    } catch (error: any) {
+      return rejectWithValue(
+        error.response?.data?.detail || 'Failed to fetch habitats'
       );
     }
   }
@@ -141,6 +177,21 @@ const pokemonSlice = createSlice({
       state.list = [];
       state.pagination.currentPage = 1;
     },
+    setRegionFilter: (state, action: PayloadAction<string>) => {
+      state.filters.region = action.payload || null;
+      state.list = [];
+      state.pagination.currentPage = 1;
+    },
+    setHabitatFilter: (state, action: PayloadAction<string>) => {
+      state.filters.habitat = action.payload || null;
+      state.list = [];
+      state.pagination.currentPage = 1;
+    },
+    setDifficultyFilter: (state, action: PayloadAction<string>) => {
+      state.filters.difficulty = action.payload || null;
+      state.list = [];
+      state.pagination.currentPage = 1;
+    },
     setSortBy: (
       state,
       action: PayloadAction<'id' | 'name' | 'height' | 'weight' | 'stats_total'>
@@ -184,6 +235,14 @@ const pokemonSlice = createSlice({
       .addCase(fetchTypes.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
+      })
+      // Fetch regions
+      .addCase(fetchRegions.fulfilled, (state, action) => {
+        state.availableRegions = action.payload;
+      })
+      // Fetch habitats
+      .addCase(fetchHabitats.fulfilled, (state, action) => {
+        state.availableHabitats = action.payload;
       })
       // Fetch Pokemon list
       .addCase(fetchPokemonList.pending, (state) => {
@@ -275,6 +334,9 @@ const pokemonSlice = createSlice({
 
 export const {
   setTypeFilter,
+  setRegionFilter,
+  setHabitatFilter,
+  setDifficultyFilter,
   setSortBy,
   setSortOrder,
   setCapturedFilter,

@@ -11,11 +11,24 @@ async def get_pokemon_types():
     """Get list of all available Pokemon types"""
     return PokemonService.get_available_types()
 
+@router.get("/regions", response_model=List[str])
+async def get_pokemon_regions():
+    """Get list of all available Pokemon regions"""
+    return PokemonService.get_available_regions()
+
+@router.get("/habitats", response_model=List[str])
+async def get_pokemon_habitats():
+    """Get list of all available Pokemon habitats"""
+    return PokemonService.get_available_habitats()
+
 @router.get("/", response_model=PokemonListResponse)
 async def get_pokemon_list(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=50, description="Pokemon per page (max 50)"),
     types: Optional[str] = Query(None, description="Comma-separated type names (max 2)"),
+    region: Optional[str] = Query(None, description="Filter by region"),
+    habitat: Optional[str] = Query(None, description="Filter by habitat"),
+    difficulty: Optional[str] = Query(None, description="Filter by difficulty (weak, easy, medium, hard, legendary, mythical)"),
     sort_by: Optional[str] = Query(None, description="Sort field: id, name, height, weight, stats_total"),
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order: asc or desc"),
     captured_only: bool = Query(False, description="Show only captured Pokemon"),
@@ -27,6 +40,9 @@ async def get_pokemon_list(
     - **page**: Page number (starting at 1)
     - **page_size**: Number of Pokemon per page (max 50)
     - **types**: Filter by types (comma-separated, max 2 types)
+    - **region**: Filter by region (kanto, johto, hoenn, etc.)
+    - **habitat**: Filter by habitat (grassland, forest, cave, etc.)
+    - **difficulty**: Filter by difficulty based on stats (weak, easy, medium, hard, legendary, mythical)
     - **sort_by**: Sort by field (id, name, height, weight, stats_total)
     - **sort_order**: Sort order (asc or desc)
     - **captured_only**: If true, only show Pokemon captured by the current user
@@ -54,6 +70,9 @@ async def get_pokemon_list(
             page=page,
             page_size=page_size,
             types=type_list,
+            region=region,
+            habitat=habitat,
+            difficulty=difficulty,
             sort_by=sort_by,
             sort_order=sort_order,
             trainer_id=current_user,

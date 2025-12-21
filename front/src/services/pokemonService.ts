@@ -50,6 +50,9 @@ export interface PokemonListParams {
   page?: number;
   page_size?: number;
   types?: string;  // Comma-separated type names
+  region?: string;  // Filter by region
+  habitat?: string;  // Filter by habitat
+  difficulty?: string;  // Filter by difficulty (weak, easy, medium, hard, legendary, mythical)
   sort_by?: 'id' | 'name' | 'height' | 'weight' | 'stats_total';
   sort_order?: 'asc' | 'desc';
   captured_only?: boolean;  // Filter for only captured Pokemon
@@ -58,6 +61,16 @@ export interface PokemonListParams {
 export const pokemonService = {
   getTypes: async (): Promise<string[]> => {
     const response = await api.get('/pokemon/types');
+    return response.data;
+  },
+
+  getRegions: async (): Promise<string[]> => {
+    const response = await api.get('/pokemon/regions');
+    return response.data;
+  },
+
+  getHabitats: async (): Promise<string[]> => {
+    const response = await api.get('/pokemon/habitats');
     return response.data;
   },
 
