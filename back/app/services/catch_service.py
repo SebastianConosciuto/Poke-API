@@ -64,7 +64,7 @@ class CatchService:
             time_per_button=time_per_button,
             total_buttons=buttons
         )
-    
+      
     @staticmethod
     async def get_random_pokemon(
         region: str,
@@ -327,3 +327,5 @@ class CatchService:
             print(f"Error fetching difficulties: {e}")
             # Return all difficulties as fallback
             return ['weak', 'easy', 'medium', 'hard', 'legendary', 'mythical']
+
+
