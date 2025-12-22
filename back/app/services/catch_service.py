@@ -70,18 +70,21 @@ class CatchService:
         region: str,
         habitat: str,
         difficulty: DifficultyLevel
-    ) -> CatchChallenge:
+    ) -> Optional[CatchChallenge]:
         """
         Get a random Pokemon from specified region and habitat
         Generate QTE challenge based on Pokemon stats
         """
         try:
             # Build query based on filters
-            query = supabase.table('pokemon').select('id, name, sprite_official, sprite_default, stats_total, region, habitat')
+            query = supabase.table('pokemon').select('*')
             
             # Apply filters
-            query = query.eq('region', region.lower())
-            query = query.eq('habitat', habitat.lower())
+            if region and region.lower() not in ['any', '']:
+                query = query.eq('region', region.lower())
+        
+            if habitat and habitat.lower() not in ['any', '']:
+                query = query.eq('habitat', habitat.lower())
             
             # Apply stat-based difficulty filter
             if difficulty == DifficultyLevel.WEAK:
