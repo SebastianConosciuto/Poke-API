@@ -1,84 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Container, FormControl, InputLabel, Select, MenuItem, Alert, Snackbar } from '@mui/material';
+import {
+  Container,
+  Box,
+  Typography,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Snackbar,
+  Alert,
+} from '@mui/material';
+import { styled, keyframes } from '@mui/material/styles';
 import { Icon } from '@iconify/react';
-import { styled } from '@mui/material/styles';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
   fetchCatchOptions,
+  fetchHabitats,
+  fetchDifficulties,
   startCatchAttempt,
   completeCatchAttempt,
   clearChallenge,
   clearResult,
 } from '../../features/catch/catchSlice';
 import { fetchPokemonList } from '../../features/pokemon/pokemonSlice';
-import PixelCard from '../common/PixelCard';
 import PixelButton from '../common/PixelButton';
-import { animations } from '../../styles/animations';
+import PixelCard from '../common/PixelCard';
 import { QTEMinigame } from './QTEMinigame';
 
+// Animations
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const slideIn = keyframes`
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+`;
+
+const animations = { fadeIn, slideIn };
+
+// Styled components
 const PageContainer = styled(Box)(({ theme }) => ({
   minHeight: '100vh',
   backgroundColor: '#E8F5E9',
-  backgroundImage: `
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 20px,
-      rgba(0, 0, 0, 0.02) 20px,
-      rgba(0, 0, 0, 0.02) 40px
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 20px,
-      rgba(0, 0, 0, 0.02) 20px,
-      rgba(0, 0, 0, 0.02) 40px
-    )
-  `,
   padding: theme.spacing(4),
-  transition: 'background-color 0.5s ease, background-image 0.5s ease',
+  transition: 'background 0.5s ease',
 }));
-
-// Region-specific background configurations
-const REGION_BACKGROUNDS: { [key: string]: { color: string; gradient: string } } = {
-  kanto: {
-    color: '#E8F5E9', // Light green
-    gradient: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
-  },
-  johto: {
-    color: '#FFF3E0', // Light orange
-    gradient: 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)',
-  },
-  hoenn: {
-    color: '#E3F2FD', // Light blue
-    gradient: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)',
-  },
-  sinnoh: {
-    color: '#F3E5F5', // Light purple
-    gradient: 'linear-gradient(135deg, #F3E5F5 0%, #E1BEE7 100%)',
-  },
-  unova: {
-    color: '#FFF8E1', // Light yellow
-    gradient: 'linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%)',
-  },
-  kalos: {
-    color: '#FCE4EC', // Light pink
-    gradient: 'linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 100%)',
-  },
-  alola: {
-    color: '#E0F2F1', // Light teal
-    gradient: 'linear-gradient(135deg, #E0F2F1 0%, #B2DFDB 100%)',
-  },
-  galar: {
-    color: '#EFEBE9', // Light brown
-    gradient: 'linear-gradient(135deg, #EFEBE9 0%, #D7CCC8 100%)',
-  },
-  paldea: {
-    color: '#FFF9C4', // Light gold/yellow
-    gradient: 'linear-gradient(135deg, #FFF9C4 0%, #FFF59D 100%)',
-  },
-};
 
 const Header = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
@@ -92,22 +61,22 @@ const Header = styled(Box)(({ theme }) => ({
   animation: `${animations.slideIn} 0.5s ease-out`,
 }));
 
-const Title = styled(Typography)(({ theme }) => ({
+const Title = styled(Typography)({
   fontFamily: '"Press Start 2P", monospace',
   fontSize: '1.5rem',
   color: '#fff',
   textShadow: '3px 3px 0px rgba(0, 0, 0, 0.3)',
-}));
+});
 
 const SectionCard = styled(PixelCard)(({ theme }) => ({
-  animation: `${animations.fadeIn} 0.7s ease-out`,
   marginBottom: theme.spacing(4),
+  animation: `${animations.fadeIn} 0.7s ease-out`,
 }));
 
 const SectionTitle = styled(Typography)(({ theme }) => ({
   fontFamily: '"Press Start 2P", monospace',
-  fontSize: '1.2rem',
-  color: theme.palette.primary.main,
+  fontSize: '1rem',
+  color: theme.palette.secondary.main,
   marginBottom: theme.spacing(3),
 }));
 
@@ -134,11 +103,33 @@ const StyledFormControl = styled(FormControl)({
   },
 });
 
+// Region background gradients
+const REGION_BACKGROUNDS: Record<string, { gradient: string }> = {
+  kanto: { gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+  johto: { gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
+  hoenn: { gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
+  sinnoh: { gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
+  unova: { gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
+  kalos: { gradient: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)' },
+  alola: { gradient: 'linear-gradient(135deg, #ffa751 0%, #ffe259 100%)' },
+  galar: { gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
+  paldea: { gradient: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
+};
+
 const CatchPokemon: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { regions, habitats, currentChallenge, lastResult, isLoading, isLoadingOptions } = 
-    useAppSelector((state) => state.catch);
+  const { 
+    regions, 
+    habitats, 
+    difficulties,
+    currentChallenge, 
+    lastResult, 
+    isLoading, 
+    isLoadingOptions,
+    isLoadingHabitats,
+    isLoadingDifficulties,
+  } = useAppSelector((state) => state.catch);
 
   const [region, setRegion] = useState('any');
   const [habitat, setHabitat] = useState('any');
@@ -152,18 +143,43 @@ const CatchPokemon: React.FC = () => {
     severity: 'success' as 'success' | 'error' | 'info' 
   });
 
-  // Fetch options on mount
+  // Fetch initial regions on mount
   useEffect(() => {
     if (regions.length === 0) {
       dispatch(fetchCatchOptions());
     }
   }, [dispatch, regions.length]);
 
+  // Fetch habitats when region changes
+  useEffect(() => {
+    if (region && region !== 'any') {
+      dispatch(fetchHabitats(region));
+      setHabitat('any'); // Reset habitat selection
+    } else if (region === 'any') {
+      dispatch(fetchHabitats(undefined));
+    }
+  }, [region, dispatch]);
+
+  // Fetch difficulties when region or habitat changes
+  useEffect(() => {
+    const regionFilter = region !== 'any' ? region : undefined;
+    const habitatFilter = habitat !== 'any' ? habitat : undefined;
+    
+    if (regionFilter || habitatFilter) {
+      dispatch(fetchDifficulties({ region: regionFilter, habitat: habitatFilter }));
+    } else {
+      // Fetch all difficulties if no filters
+      dispatch(fetchDifficulties({}));
+    }
+  }, [region, habitat, dispatch]);
+
   // Handle catch result
   useEffect(() => {
     if (lastResult) {
       let message = lastResult.message;
-      if (lastResult.perfect && lastResult.reward_message) {
+      
+      // Add XP info to message
+      if (lastResult.reward_message) {
         message += ` ${lastResult.reward_message}`;
       }
       
@@ -184,7 +200,7 @@ const CatchPokemon: React.FC = () => {
   }, [lastResult, dispatch]);
 
   const handleStartCatch = async () => {
-    // Start the catch attempt (region and habitat can be "any")
+    // Start the catch attempt
     const result = await dispatch(startCatchAttempt({ region, habitat, difficulty }));
     
     if (startCatchAttempt.fulfilled.match(result)) {
@@ -230,7 +246,7 @@ const CatchPokemon: React.FC = () => {
 
   // Get background style based on selected region
   const getRegionBackground = () => {
-    if (!region || region === '' || region === 'any') return {};
+    if (!region || region === 'any') return {};
     const regionBg = REGION_BACKGROUNDS[region.toLowerCase()];
     if (!regionBg) return {};
     
@@ -284,7 +300,7 @@ const CatchPokemon: React.FC = () => {
           <InfoText>
             ▸ Choose a region and habitat to find wild Pokemon<br />
             ▸ Select "Any" to search across all regions/habitats<br />
-            ▸ Difficulty filters Pokemon by total stats (strength)<br />
+            ▸ Available options update based on your selection<br />
             ▸ Stronger Pokemon = more buttons & less time in QTE
           </InfoText>
 
@@ -316,7 +332,7 @@ const CatchPokemon: React.FC = () => {
                 value={habitat}
                 onChange={(e) => setHabitat(e.target.value)}
                 label="Habitat"
-                disabled={isLoadingOptions}
+                disabled={isLoadingHabitats || (!region || region === 'any' && habitats.length === 0)}
               >
                 <MenuItem value="any">
                   <em>Any Habitat</em>
@@ -327,6 +343,11 @@ const CatchPokemon: React.FC = () => {
                   </MenuItem>
                 ))}
               </Select>
+              {isLoadingHabitats && (
+                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 1, fontFamily: '"Roboto Mono", monospace' }}>
+                  Loading available habitats...
+                </Typography>
+              )}
             </StyledFormControl>
 
             {/* Difficulty Selection */}
@@ -334,70 +355,94 @@ const CatchPokemon: React.FC = () => {
               <InputLabel>Difficulty</InputLabel>
               <Select
                 value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value as 'weak' | 'easy' | 'medium' | 'hard' | 'legendary' | 'mythical')}
+                onChange={(e) => setDifficulty(e.target.value as any)}
                 label="Difficulty"
+                disabled={isLoadingDifficulties}
               >
-                <MenuItem value="weak">
-                  <Box>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#8BC34A' }}>
-                      180-300 (Weak)
-                    </Typography>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
-                      3 buttons, 1.5s per button
-                    </Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="easy">
-                  <Box>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#4CAF50' }}>
-                      301-400 (Easy)
-                    </Typography>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
-                      4 buttons, 1.2s per button
-                    </Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="medium">
-                  <Box>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#FF9800' }}>
-                      401-500 (Medium)
-                    </Typography>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
-                      5 buttons, 1.0s per button
-                    </Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="hard">
-                  <Box>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#F44336' }}>
-                      501-600 (Hard)
-                    </Typography>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
-                      6 buttons, 0.8s per button
-                    </Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="legendary">
-                  <Box>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#9C27B0' }}>
-                      601-720 (Legendary)
-                    </Typography>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
-                      7 buttons, 0.6s per button
-                    </Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="mythical">
-                  <Box>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#FF1744' }}>
-                      721+ (Mythical)
-                    </Typography>
-                    <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
-                      8 buttons, 0.5s per button
-                    </Typography>
-                  </Box>
-                </MenuItem>
+                {/* Only show difficulties that are available */}
+                {difficulties.includes('weak') && (
+                  <MenuItem value="weak">
+                    <Box>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#8BC34A' }}>
+                        180-300 (Weak)
+                      </Typography>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
+                        3 buttons, 1.5s per button
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                )}
+                {difficulties.includes('easy') && (
+                  <MenuItem value="easy">
+                    <Box>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#4CAF50' }}>
+                        301-400 (Easy)
+                      </Typography>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
+                        4 buttons, 1.2s per button
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                )}
+                {difficulties.includes('medium') && (
+                  <MenuItem value="medium">
+                    <Box>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#FF9800' }}>
+                        401-500 (Medium)
+                      </Typography>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
+                        5 buttons, 1.0s per button
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                )}
+                {difficulties.includes('hard') && (
+                  <MenuItem value="hard">
+                    <Box>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#F44336' }}>
+                        501-600 (Hard)
+                      </Typography>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
+                        6 buttons, 0.8s per button
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                )}
+                {difficulties.includes('legendary') && (
+                  <MenuItem value="legendary">
+                    <Box>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#9C27B0' }}>
+                        601-720 (Legendary)
+                      </Typography>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
+                        7 buttons, 0.6s per button
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                )}
+                {difficulties.includes('mythical') && (
+                  <MenuItem value="mythical">
+                    <Box>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontWeight: 'bold', color: '#FF1744' }}>
+                        721+ (Mythical)
+                      </Typography>
+                      <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.75rem', color: '#666' }}>
+                        8 buttons, 0.5s per button
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                )}
               </Select>
+              {isLoadingDifficulties && (
+                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 1, fontFamily: '"Roboto Mono", monospace' }}>
+                  Loading available difficulties...
+                </Typography>
+              )}
+              {!isLoadingDifficulties && difficulties.length === 0 && (region !== 'any' || habitat !== 'any') && (
+                <Typography sx={{ fontSize: '0.75rem', color: 'error.main', mt: 1, fontFamily: '"Roboto Mono", monospace' }}>
+                  No Pokemon available for this combination
+                </Typography>
+              )}
             </StyledFormControl>
           </Box>
 
@@ -405,7 +450,7 @@ const CatchPokemon: React.FC = () => {
           <Box sx={{ display: 'flex', gap: 2, mt: 4 }}>
             <PixelButton
               onClick={handleStartCatch}
-              disabled={!region || !habitat || isLoading}
+              disabled={!region || !habitat || isLoading || difficulties.length === 0}
               pixelColor="#4CAF50"
               fullWidth
               startIcon={<Icon icon="game-icons:perspective-dice-six" width="16" height="16" />}
@@ -427,7 +472,7 @@ const CatchPokemon: React.FC = () => {
           
           <InfoText>
             <strong>1. Select Location:</strong> Choose region and habitat (or "Any")<br />
-            <strong>2. Choose Difficulty:</strong> Filters Pokemon by strength<br />
+            <strong>2. Choose Difficulty:</strong> Only available difficulties shown<br />
             • Weak: 180-300 stats - Easier QTE<br />
             • Easy: 301-400 stats - Easier QTE<br />
             • Medium: 401-500 stats - Moderate QTE<br />
@@ -437,60 +482,51 @@ const CatchPokemon: React.FC = () => {
             <strong>3. Start Catch:</strong> Random Pokemon appears<br />
             <strong>4. Countdown:</strong> 3... 2... 1... Get ready!<br />
             <strong>5. QTE Challenge:</strong> Press arrow keys as they appear<br />
-            <strong>6. Success:</strong> Add Pokemon to your Pokedex!
+            <strong>6. Success:</strong> Add Pokemon to your Pokedex and gain XP!
           </InfoText>
 
           <Box sx={{ mt: 2, p: 2, backgroundColor: 'rgba(59, 76, 202, 0.05)', border: '2px solid', borderColor: 'secondary.main' }}>
             <Typography sx={{ fontFamily: '"Roboto Mono", monospace', fontSize: '0.85rem', color: 'text.secondary' }}>
-              💡 <strong>QTE Difficulty:</strong> Based on Pokemon stats<br />
-              • 180-300 stats: 3 buttons, 1.5s each<br />
-              • 301-400 stats: 4 buttons, 1.2s each<br />
-              • 401-500 stats: 5 buttons, 1.0s each<br />
-              • 501-600 stats: 6 buttons, 0.8s each<br />
-              • 601-720 stats: 7 buttons, 0.6s each<br />
-              • 721+ stats: 8 buttons, 0.5s each<br />
-              <br />
-              ⚡ <strong>Perfect Catch:</strong> Press all buttons within 60% of time limit for bonus!<br />
-              <br />
-              🌍 <strong>Tip:</strong> Select "Any Region" or "Any Habitat" to search everywhere!
+              💡 <strong>Smart Filters:</strong> Options update based on available Pokemon<br />
+              ⚡ <strong>XP Rewards:</strong> 30 XP for success, 15 XP for trying!<br />
+              🌍 <strong>Tip:</strong> Select "Any" to search everywhere!
             </Typography>
           </Box>
         </SectionCard>
-      </Container>
 
-      {/* QTE Minigame (with integrated countdown) */}
-      {currentChallenge && (
-        <QTEMinigame
-          open={showGame}
-          onClose={handleGameClose}
-          pokemonName={currentChallenge.pokemon_name}
-          pokemonSprite={currentChallenge.pokemon_sprite}
-          sequence={currentChallenge.sequence.buttons}
-          timePerButton={currentChallenge.sequence.time_per_button}
-          habitat={habitat}
-          onComplete={handleGameComplete}
-        />
-      )}
+        {/* QTE Minigame Modal */}
+        {showGame && currentChallenge && (
+          <QTEMinigame
+            open={showGame}
+            onClose={handleGameClose}
+            pokemonName={currentChallenge.pokemon_name}
+            pokemonSprite={currentChallenge.pokemon_sprite}
+            sequence={currentChallenge.sequence.buttons}
+            timePerButton={currentChallenge.sequence.time_per_button}
+            onComplete={handleGameComplete}
+          />
+        )}
 
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
+        {/* Snackbar for notifications */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
           onClose={handleCloseSnackbar}
-          severity={snackbar.severity}
-          sx={{
-            fontFamily: '"Roboto Mono", monospace',
-            fontSize: '0.85rem',
-            border: '2px solid #000',
-          }}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+          <Alert
+            onClose={handleCloseSnackbar}
+            severity={snackbar.severity}
+            sx={{
+              fontFamily: '"Roboto Mono", monospace',
+              border: '3px solid currentColor',
+              borderRadius: 0,
+            }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Container>
     </PageContainer>
   );
 };

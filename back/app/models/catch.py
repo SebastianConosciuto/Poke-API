@@ -53,3 +53,6 @@ class CatchResult(BaseModel):
     accuracy: float = Field(..., description="Percentage of buttons correct")
     perfect: bool = Field(default=False, description="Perfect catch bonus")
     reward_message: str = Field(default="", description="Bonus reward message if perfect")
+    xp_awarded: int = 0
+    new_level: int = 1
+    leveled_up: bool = False

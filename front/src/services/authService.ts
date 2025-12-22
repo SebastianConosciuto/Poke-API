@@ -1,23 +1,36 @@
 import api from './api';
 
-export interface LoginCredentials {
+export type LoginCredentials = {
   trainer_id: string;
   password: string;
 }
 
-export interface RegisterCredentials {
+export type RegisterCredentials = {
   trainer_id: string;
   password: string;
 }
 
-export interface AuthResponse {
+export type AuthResponse = {
   access_token: string;
   token_type: string;
 }
 
-export interface User {
+export type User = {
   trainer_id: string;
   created_at?: string;
+  level: number;
+  experience: number;
+}
+
+export type UserStats = {
+  trainer_id: string;
+  level: number;
+  experience: number;
+  experience_in_level: number;
+  experience_to_next_level: number;
+  pokemon_captured: number;
+  pokedex_completion: number;
+  total_pokemon: number;
 }
 
 export const authService = {
@@ -33,6 +46,11 @@ export const authService = {
 
   getCurrentUser: async (): Promise<User> => {
     const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  getStats: async (): Promise<UserStats> => {
+    const response = await api.get('/auth/stats');
     return response.data;
   },
 

@@ -3,7 +3,7 @@ Catching router - API endpoints for Pokemon catching minigame
 """
 
 from fastapi import APIRouter, Depends
-from typing import List
+from typing import List, Optional
 from app.models.catch import (
     CatchRequest,
     CatchChallenge,
@@ -21,9 +21,23 @@ async def get_regions():
     return CatchService.get_available_regions()
 
 @router.get("/habitats", response_model=List[str])
-async def get_habitats():
-    """Get list of available Pokemon habitats/biomes"""
-    return CatchService.get_available_habitats()
+async def get_habitats(region: Optional[str] = None):
+    """
+    Get list of available Pokemon habitats
+    If region is provided, only returns habitats available in that region
+    """
+    return await CatchService.get_available_habitats(region)
+
+@router.get("/difficulties", response_model=List[str])
+async def get_difficulties(
+    region: Optional[str] = None,
+    habitat: Optional[str] = None
+):
+    """
+    Get list of available difficulty levels
+    Filtered by region and/or habitat if provided
+    """
+    return await CatchService.get_available_difficulties(region, habitat)
 
 @router.post("/start", response_model=CatchChallenge)
 async def start_catch_attempt(
@@ -51,6 +65,7 @@ async def complete_catch_attempt(
     Submit catch attempt result
     
     Records the attempt and captures the Pokemon if successful
+    Awards XP for both successful and failed attempts
     """
     return await CatchService.record_catch_attempt(
         trainer_id=current_user,

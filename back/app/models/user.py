@@ -16,6 +16,19 @@ class User(BaseModel):
     """Schema for user data"""
     trainer_id: str
     created_at: Optional[datetime] = None
+    level: int = 1
+    experience: int = 0
+
+class UserStats(BaseModel):
+    """Schema for user statistics"""
+    trainer_id: str
+    level: int
+    experience: int
+    experience_in_level: int
+    experience_to_next_level: int
+    pokemon_captured: int
+    pokedex_completion: float
+    total_pokemon: int = 1025  # Total number of Pokemon in database
 
 class Token(BaseModel):
     """Schema for JWT token"""

@@ -1,51 +1,46 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Container } from '@mui/material';
+import { Container, Box, Typography, Alert, CircularProgress } from '@mui/material';
+import { styled, keyframes } from '@mui/material/styles';
 import { Icon } from '@iconify/react';
-import { styled } from '@mui/material/styles';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../features/auth/authSlice';
-import PixelCard from '../common/PixelCard';
 import PixelButton from '../common/PixelButton';
-import { animations } from '../../styles/animations';
+import PixelCard from '../common/PixelCard';
+import { authService } from '../../services/authService';
+import type { UserStats } from '../../services/authService';
 
-// Pokémon quotes from games and series
+// Animations
+const slideIn = keyframes`
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+`;
+
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
+
+const animations = {
+  slideIn,
+  fadeIn,
+};
+
+// Pokemon quotes for inspiration
 const POKEMON_QUOTES = [
   {
-    quote: "A Pokémon Trainer must have vision, strategy, and compassion for their Pokémon.",
+    quote: "Do you have what it takes to be a Pokemon Master?",
     author: "Professor Oak"
-  },
-  {
-    quote: "The most important thing is the bond between Pokémon and Trainer.",
-    author: "Lance"
-  },
-  {
-    quote: "Strong Pokémon. Weak Pokémon. That is only the selfish perception of people.",
-    author: "Karen"
-  },
-  {
-    quote: "Technology is incredible! You can store Pokémon in a PC!",
-    author: "Bill"
-  },
-  {
-    quote: "Do you know what's so special about Pokémon? You can always rely on them.",
-    author: "Professor Elm"
-  },
-  {
-    quote: "Pokémon battles are about bringing out the best in each other!",
-    author: "Korrina"
-  },
-  {
-    quote: "When you have a dream, you've got to grab it and never let go.",
-    author: "Professor Kukui"
-  },
-  {
-    quote: "The bond you share with your Pokémon is marvelous!",
-    author: "Cynthia"
-  },
-  {
-    quote: "Pokemon are living beings! They think, they feel, they laugh, they cry!",
-    author: "Mewtwo"
   },
   {
     quote: "The important thing is not how long you live. It's what you accomplish with your life.",
@@ -123,10 +118,69 @@ const InfoText = styled(Typography)(({ theme }) => ({
   lineHeight: 1.8,
 }));
 
+const StatLabel = styled('span')({
+  color: '#666',
+  marginRight: '8px',
+});
+
+const StatValue = styled('span')({
+  color: '#000',
+  fontWeight: 'bold',
+});
+
+const ProgressBar = styled(Box)(({ theme }) => ({
+  width: '100%',
+  height: '24px',
+  backgroundColor: '#E0E0E0',
+  border: '3px solid #000',
+  marginTop: theme.spacing(2),
+  position: 'relative',
+  overflow: 'hidden',
+}));
+
+const ProgressFill = styled(Box)<{ width: number }>(({ width }) => ({
+  height: '100%',
+  width: `${width}%`,
+  backgroundColor: '#4CAF50',
+  transition: 'width 0.5s ease-out',
+  position: 'relative',
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundImage: `repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 4px,
+      rgba(255, 255, 255, 0.2) 4px,
+      rgba(255, 255, 255, 0.2) 8px
+    )`,
+  },
+}));
+
+const ProgressText = styled(Typography)({
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  fontFamily: '"Press Start 2P", monospace',
+  fontSize: '0.7rem',
+  color: '#000',
+  textShadow: '1px 1px 0px rgba(255, 255, 255, 0.5)',
+  zIndex: 1,
+});
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Select a random quote on component mount
   const randomQuote = useMemo(() => {
@@ -134,10 +188,34 @@ const Dashboard: React.FC = () => {
     return POKEMON_QUOTES[randomIndex];
   }, []);
 
+  // Fetch user stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const userStats = await authService.getStats();
+        setStats(userStats);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch stats:', err);
+        setError('Failed to load statistics');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
   };
+
+  // Calculate XP progress percentage
+  const xpProgress = stats 
+    ? (stats.experience_in_level / (stats.experience_in_level + stats.experience_to_next_level)) * 100
+    : 0;
 
   return (
     <DashboardContainer>
@@ -182,12 +260,6 @@ const Dashboard: React.FC = () => {
               View Pokedex
             </PixelButton>
             <PixelButton 
-              pixelColor="#FF9800" 
-              startIcon={<Icon icon="game-icons:swords-emblem" width="16" height="16" />}
-            >
-              My Team
-            </PixelButton>
-            <PixelButton 
               pixelColor="#9C27B0" 
               startIcon={<Icon icon="game-icons:targeting" width="16" height="16" />}
               onClick={() => navigate('/catch')}
@@ -210,12 +282,57 @@ const Dashboard: React.FC = () => {
             Quick Stats
           </Typography>
 
-          <InfoText>
-            ▸ Pokémon Caught: 0<br />
-            ▸ Pokédex Completion: 0%<br />
-            ▸ Team Size: 0/6<br />
-            ▸ Trainer Level: 1
-          </InfoText>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : error ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          ) : stats ? (
+            <>
+              <InfoText>
+                <StatLabel>▸ Pokémon Captured:</StatLabel>
+                <StatValue>{stats.pokemon_captured}</StatValue>
+                <br />
+                <StatLabel>▸ Pokédex Completion:</StatLabel>
+                <StatValue>{stats.pokedex_completion.toFixed(2)}%</StatValue>
+                <br />
+                <StatLabel>▸ Trainer Level:</StatLabel>
+                <StatValue>{stats.level}</StatValue>
+              </InfoText>
+
+              <Box sx={{ mt: 3 }}>
+                <Typography
+                  sx={{
+                    fontFamily: '"Press Start 2P", monospace',
+                    fontSize: '0.7rem',
+                    color: 'text.secondary',
+                    marginBottom: 1,
+                  }}
+                >
+                  Experience Progress
+                </Typography>
+                <ProgressBar>
+                  <ProgressFill width={xpProgress} />
+                  <ProgressText>
+                    {stats.experience_in_level} / {stats.experience_in_level + stats.experience_to_next_level} XP
+                  </ProgressText>
+                </ProgressBar>
+                <Typography
+                  sx={{
+                    fontFamily: '"Roboto Mono", monospace',
+                    fontSize: '0.75rem',
+                    color: 'text.secondary',
+                    mt: 1,
+                  }}
+                >
+                  {stats.experience_to_next_level} XP until level {stats.level + 1}
+                </Typography>
+              </Box>
+            </>
+          ) : null}
 
           <Box
             sx={{

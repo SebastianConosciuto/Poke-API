@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import timedelta
-from app.models.user import UserCreate, UserLogin, Token, User
+from app.models.user import UserCreate, UserLogin, Token, User, UserStats
 from app.utils.auth import (
     get_password_hash, 
     verify_password, 
@@ -9,6 +9,7 @@ from app.utils.auth import (
 )
 from app.database import supabase
 from app.config import ACCESS_TOKEN_EXPIRE_MINUTES
+from app.services.experience_service import ExperienceService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -31,7 +32,9 @@ async def register(user: UserCreate):
         # Insert new user into database
         new_user = {
             "trainer_id": user.trainer_id,
-            "password": hashed_password
+            "password": hashed_password,
+            "level": 1,
+            "experience": 0
         }
         
         response = supabase.table("trainers").insert(new_user).execute()
@@ -42,7 +45,12 @@ async def register(user: UserCreate):
                 detail="Failed to create user"
             )
         
-        return User(trainer_id=user.trainer_id, created_at=response.data[0].get("created_at"))
+        return User(
+            trainer_id=user.trainer_id, 
+            created_at=response.data[0].get("created_at"),
+            level=1,
+            experience=0
+        )
         
     except HTTPException:
         raise
@@ -97,7 +105,9 @@ async def login(user: UserLogin):
 async def get_me(current_user: str = Depends(get_current_user)):
     """Get current authenticated user information"""
     try:
-        response = supabase.table("trainers").select("trainer_id, created_at").eq("trainer_id", current_user).execute()
+        response = supabase.table("trainers").select(
+            "trainer_id, created_at, level, experience"
+        ).eq("trainer_id", current_user).execute()
         
         if not response.data:
             raise HTTPException(
@@ -105,7 +115,13 @@ async def get_me(current_user: str = Depends(get_current_user)):
                 detail="User not found"
             )
         
-        return User(**response.data[0])
+        user_data = response.data[0]
+        return User(
+            trainer_id=user_data["trainer_id"],
+            created_at=user_data.get("created_at"),
+            level=user_data.get("level", 1),
+            experience=user_data.get("experience", 0)
+        )
         
     except HTTPException:
         raise
@@ -113,4 +129,27 @@ async def get_me(current_user: str = Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get user: {str(e)}"
+        )
+
+@router.get("/stats", response_model=UserStats)
+async def get_stats(current_user: str = Depends(get_current_user)):
+    """
+    Get comprehensive user statistics
+    
+    Returns:
+    - Trainer level and experience
+    - Pokemon captured count
+    - Pokedex completion percentage
+    - XP needed for next level
+    """
+    try:
+        stats = await ExperienceService.get_trainer_stats(current_user)
+        return UserStats(**stats)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get stats: {str(e)}"
         )

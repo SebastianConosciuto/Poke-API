@@ -1,18 +1,18 @@
 import api from './api';
 
-export interface CatchRequest {
+export type CatchRequest = {
   region: string;
   habitat: string;
   difficulty: 'weak' | 'easy' | 'medium' | 'hard' | 'legendary' | 'mythical';
 }
 
-export interface ButtonSequence {
+export type ButtonSequence = {
   buttons: string[];
   time_per_button: number;
   total_buttons: number;
 }
 
-export interface CatchChallenge {
+export type CatchChallenge = {
   pokemon_id: number;
   pokemon_name: string;
   pokemon_sprite: string;
@@ -21,7 +21,7 @@ export interface CatchChallenge {
   difficulty: string;
 }
 
-export interface CatchAttemptResult {
+export type CatchAttemptResult = {
   pokemon_id: number;
   success: boolean;
   buttons_correct: number;
@@ -30,13 +30,16 @@ export interface CatchAttemptResult {
   perfect: boolean;
 }
 
-export interface CatchResult {
+export type CatchResult = {
   success: boolean;
   message: string;
   pokemon_name: string;
   accuracy: number;
   perfect: boolean;
   reward_message: string;
+  xp_awarded: number;
+  new_level: number;
+  leveled_up: boolean;
 }
 
 export const catchService = {
@@ -45,8 +48,17 @@ export const catchService = {
     return response.data;
   },
 
-  getHabitats: async (): Promise<string[]> => {
-    const response = await api.get('/catch/habitats');
+  getHabitats: async (region?: string): Promise<string[]> => {
+    const params = region ? { region } : {};
+    const response = await api.get('/catch/habitats', { params });
+    return response.data;
+  },
+
+  getDifficulties: async (region?: string, habitat?: string): Promise<string[]> => {
+    const params: any = {};
+    if (region) params.region = region;
+    if (habitat) params.habitat = habitat;
+    const response = await api.get('/catch/difficulties', { params });
     return response.data;
   },
 
