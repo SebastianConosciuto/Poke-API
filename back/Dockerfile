@@ -1,33 +1,28 @@
 # syntax=docker/dockerfile:1.6
+FROM python:3.11-slim AS base
 
-# ================================
-# Stage 1: Build the Vite app
-# ================================
-FROM node:20-alpine AS builder
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# Vite reads VITE_* env vars at build time and bakes them into the bundle.
-# Override at build with: --build-arg VITE_API_BASE_URL=http://your-backend:18080
-ARG VITE_API_BASE_URL=https://pokeapi.api.apps.orquesta.consulting
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install deps using the lockfile for reproducibility
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-# Copy source and build
 COPY . .
-RUN npm run build
 
-# ================================
-# Stage 2: Serve with Nginx
-# ================================
-FROM nginx:1.27-alpine AS runtime
+RUN useradd --create-home --shell /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
 
-# Copy the built static assets from the builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 18080
 
-EXPOSE 13001
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "18080"]
