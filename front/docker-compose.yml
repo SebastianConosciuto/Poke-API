@@ -1,0 +1,20 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Browser hits the public URL — JavaScript runs in the user's browser
+        # and cannot resolve container names. The reverse proxy terminates this
+        # hostname and routes to the container via the `main` network.
+        VITE_API_BASE_URL: https://pokeapi.api.apps.orquesta.consulting
+    container_name: pokemon-trainer-front
+    restart: unless-stopped
+    networks:
+      - main
+    # No `ports:` — the reverse proxy reaches this container by container_name
+    # on the `main` network. Add proxy labels here (Traefik/Caddy/etc.) as needed.
+
+networks:
+  main:
+    external: true

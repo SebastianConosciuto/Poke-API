@@ -1,10 +1,12 @@
 """
 Models for Pokemon catching minigame
+UPDATED: Added difficulty field to CatchAttemptResult for XP scaling
 """
 
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 from enum import Enum
+
 
 class DifficultyLevel(str, Enum):
     """Difficulty levels for catching - Based on Pokemon total stats"""
@@ -15,17 +17,20 @@ class DifficultyLevel(str, Enum):
     LEGENDARY = "legendary" # 601-720 stats: 7 buttons, 0.6s per button
     MYTHICAL = "mythical"  # 721+ stats: 8 buttons, 0.5s per button
 
+
 class CatchRequest(BaseModel):
     """Request to start a catch attempt"""
     region: str = Field(..., description="Pokemon region (kanto, johto, hoenn, etc.)")
     habitat: str = Field(..., description="Pokemon habitat (grassland, forest, cave, etc.)")
     difficulty: DifficultyLevel = Field(..., description="Difficulty level")
 
+
 class ButtonSequence(BaseModel):
     """QTE button sequence"""
     buttons: List[str] = Field(..., description="List of arrow keys: up, down, left, right")
     time_per_button: float = Field(..., description="Time allowed per button in seconds")
     total_buttons: int = Field(..., description="Total number of buttons in sequence")
+
 
 class CatchChallenge(BaseModel):
     """Response with Pokemon and QTE challenge"""
@@ -36,6 +41,7 @@ class CatchChallenge(BaseModel):
     sequence: ButtonSequence
     difficulty: DifficultyLevel
 
+
 class CatchAttemptResult(BaseModel):
     """Request to submit catch attempt result"""
     pokemon_id: int
@@ -44,6 +50,9 @@ class CatchAttemptResult(BaseModel):
     total_buttons: int = Field(..., description="Total buttons in sequence")
     time_taken: float = Field(..., description="Total time taken in seconds")
     perfect: bool = Field(default=False, description="Whether all buttons were hit quickly")
+    # NEW: Include difficulty for XP calculation
+    difficulty: Optional[str] = Field(default="medium", description="Difficulty level for XP calculation")
+
 
 class CatchResult(BaseModel):
     """Response after catch attempt"""

@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+
+# Local envs (Vite picks these up at build time — pass via --build-arg instead)
+.env
+.env.local
+.env.*.local
+
+# Tooling / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs / cache
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# Docs / docker
+README.md
+Dockerfile
+.dockerignore
+nginx.conf

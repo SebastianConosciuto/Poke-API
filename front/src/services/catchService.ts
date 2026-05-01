@@ -28,6 +28,8 @@ export type CatchAttemptResult = {
   total_buttons: number;
   time_taken: number;
   perfect: boolean;
+  // NEW: Include difficulty for XP calculation
+  difficulty: string;
 }
 
 export type CatchResult = {

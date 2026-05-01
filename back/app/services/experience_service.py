@@ -1,5 +1,6 @@
 """
 Experience and leveling service
+UPDATED: Difficulty-based XP rewards
 """
 
 from typing import Dict, Any
@@ -10,13 +11,46 @@ from fastapi import HTTPException, status
 class ExperienceService:
     """Service for handling trainer experience and leveling"""
     
-    # XP rewards
-    XP_CATCH_SUCCESS = 30
-    XP_CATCH_FAIL = 15
+    # XP rewards based on difficulty
+    # Higher difficulty = More XP reward
+    XP_REWARDS = {
+        "weak": {"success": 10, "fail": 5},
+        "easy": {"success": 20, "fail": 10},
+        "medium": {"success": 30, "fail": 15},
+        "hard": {"success": 40, "fail": 20},
+        "legendary": {"success": 50, "fail": 25},
+        "mythical": {"success": 60, "fail": 30},
+    }
+    
+    # Default XP (fallback if difficulty not found)
+    DEFAULT_XP_SUCCESS = 30
+    DEFAULT_XP_FAIL = 15
     
     # Level formula: 100 + (20 * level)
     BASE_XP = 100
     XP_PER_LEVEL = 20
+    
+    @staticmethod
+    def get_xp_for_difficulty(difficulty: str, success: bool) -> int:
+        """
+        Get XP reward based on difficulty and success/failure
+        
+        Args:
+            difficulty: The difficulty level (weak, easy, medium, hard, legendary, mythical)
+            success: Whether the catch was successful
+            
+        Returns:
+            XP amount to award
+        """
+        difficulty_lower = difficulty.lower()
+        
+        if difficulty_lower in ExperienceService.XP_REWARDS:
+            rewards = ExperienceService.XP_REWARDS[difficulty_lower]
+            return rewards["success"] if success else rewards["fail"]
+        
+        # Fallback to default values
+        print(f"[XP] Warning: Unknown difficulty '{difficulty}', using default XP")
+        return ExperienceService.DEFAULT_XP_SUCCESS if success else ExperienceService.DEFAULT_XP_FAIL
     
     @staticmethod
     def calculate_xp_for_level(level: int) -> int:
@@ -53,11 +87,13 @@ class ExperienceService:
         """
         try:
             # Get current trainer data
+            print(f"[XP] Fetching trainer data for: {trainer_id}")
             response = supabase.table("trainers").select(
                 "trainer_id, level, experience"
             ).eq("trainer_id", trainer_id).execute()
             
             if not response.data:
+                print(f"[XP] ERROR: Trainer not found: {trainer_id}")
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Trainer not found"
@@ -67,15 +103,45 @@ class ExperienceService:
             old_level = trainer.get("level", 1)
             old_xp = trainer.get("experience", 0)
             
+            print(f"[XP] Current stats - Level: {old_level}, XP: {old_xp}")
+            
             # Calculate new experience
             new_total_xp = old_xp + xp_amount
             new_level, xp_in_level = ExperienceService.calculate_level_from_xp(new_total_xp)
             
+            print(f"[XP] Awarding {xp_amount} XP -> New total: {new_total_xp}, New level: {new_level}")
+            
             # Update trainer in database
-            update_response = supabase.table("trainers").update({
+            update_data = {
                 "level": new_level,
                 "experience": new_total_xp
-            }).eq("trainer_id", trainer_id).execute()
+            }
+            print(f"[XP] Updating database with: {update_data}")
+            
+            update_response = supabase.table("trainers").update(
+                update_data
+            ).eq("trainer_id", trainer_id).execute()
+            
+            # Verify the update succeeded
+            if not update_response.data:
+                print(f"[XP] WARNING: Update returned no data!")
+                print(f"[XP] Response: {update_response}")
+                # Try to verify the data
+                verify_response = supabase.table("trainers").select(
+                    "level, experience"
+                ).eq("trainer_id", trainer_id).execute()
+                
+                if verify_response.data:
+                    actual_xp = verify_response.data[0].get("experience", 0)
+                    if actual_xp != new_total_xp:
+                        print(f"[XP] ERROR: Database not updated! Expected {new_total_xp}, got {actual_xp}")
+                        print(f"[XP] This is likely a Row Level Security (RLS) issue!")
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Failed to update experience - possible RLS policy issue"
+                        )
+            else:
+                print(f"[XP] Update successful! Response: {update_response.data}")
             
             # Calculate XP needed for next level
             xp_to_next = ExperienceService.calculate_xp_for_level(new_level)
@@ -83,6 +149,9 @@ class ExperienceService:
             # Check if leveled up
             leveled_up = new_level > old_level
             levels_gained = new_level - old_level
+            
+            if leveled_up:
+                print(f"[XP] LEVEL UP! {old_level} -> {new_level}")
             
             return {
                 "xp_awarded": xp_amount,
@@ -102,6 +171,9 @@ class ExperienceService:
         except HTTPException:
             raise
         except Exception as e:
+            print(f"[XP] EXCEPTION: {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to award experience: {str(e)}"

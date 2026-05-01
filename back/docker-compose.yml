@@ -1,0 +1,17 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pokemon-trainer-back
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - main
+    # No `ports:` — the reverse proxy reaches this container by container_name
+    # on the `main` network. Add proxy labels here (Traefik/Caddy/etc.) as needed.
+
+networks:
+  main:
+    external: true

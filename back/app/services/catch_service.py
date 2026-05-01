@@ -1,5 +1,6 @@
 """
 Catching service - Handles Pokemon catching minigame logic
+UPDATED: Uses difficulty-based XP rewards
 """
 
 import random
@@ -15,6 +16,7 @@ from app.models.catch import (
     DifficultyLevel
 )
 from app.services.experience_service import ExperienceService
+
 
 class CatchService:
     """Service for Pokemon catching minigame"""
@@ -52,75 +54,81 @@ class CatchService:
         elif stats_total < 721:
             buttons = 7
             time_per_button = 0.6
-        else:  # 721+
+        else:
             buttons = 8
             time_per_button = 0.5
         
         # Generate random button sequence
-        button_sequence = [random.choice(CatchService.ARROW_KEYS) for _ in range(buttons)]
+        sequence = [random.choice(CatchService.ARROW_KEYS) for _ in range(buttons)]
         
         return ButtonSequence(
-            buttons=button_sequence,
+            buttons=sequence,
             time_per_button=time_per_button,
             total_buttons=buttons
         )
-      
+    
     @staticmethod
     async def get_random_pokemon(
-        region: str,
-        habitat: str,
+        region: Optional[str],
+        habitat: Optional[str],
         difficulty: DifficultyLevel
-    ) -> Optional[CatchChallenge]:
-        """
-        Get a random Pokemon from specified region and habitat
-        Generate QTE challenge based on Pokemon stats
-        """
+    ) -> CatchChallenge:
+        """Get a random Pokemon matching the filters with QTE challenge"""
         try:
-            # Build query based on filters
-            query = supabase.table('pokemon').select('*')
+            # Build query
+            query = supabase.table('pokemon').select('id, name, sprites, stats_total')
             
             # Apply filters
-            if region and region.lower() not in ['any', '']:
+            if region and region.lower() != 'any':
                 query = query.eq('region', region.lower())
-        
-            if habitat and habitat.lower() not in ['any', '']:
+            
+            if habitat and habitat.lower() != 'any':
                 query = query.eq('habitat', habitat.lower())
             
-            # Apply stat-based difficulty filter
-            if difficulty == DifficultyLevel.WEAK:
-                query = query.gte('stats_total', 180).lte('stats_total', 300)
-            elif difficulty == DifficultyLevel.EASY:
-                query = query.gte('stats_total', 301).lte('stats_total', 400)
-            elif difficulty == DifficultyLevel.MEDIUM:
-                query = query.gte('stats_total', 401).lte('stats_total', 500)
-            elif difficulty == DifficultyLevel.HARD:
-                query = query.gte('stats_total', 501).lte('stats_total', 600)
-            elif difficulty == DifficultyLevel.LEGENDARY:
-                query = query.gte('stats_total', 601).lte('stats_total', 720)
-            elif difficulty == DifficultyLevel.MYTHICAL:
-                query = query.gte('stats_total', 721)
+            # Apply difficulty filter based on stats
+            difficulty_ranges = {
+                DifficultyLevel.WEAK: (180, 300),
+                DifficultyLevel.EASY: (301, 400),
+                DifficultyLevel.MEDIUM: (401, 500),
+                DifficultyLevel.HARD: (501, 600),
+                DifficultyLevel.LEGENDARY: (601, 720),
+                DifficultyLevel.MYTHICAL: (721, 9999),
+            }
+            
+            min_stats, max_stats = difficulty_ranges.get(difficulty, (401, 500))
+            query = query.gte('stats_total', min_stats).lte('stats_total', max_stats)
             
             response = query.execute()
             
             if not response.data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No Pokemon found in {region} {habitat} with {difficulty} difficulty"
+                    detail=f"No Pokemon found matching the selected criteria"
                 )
             
             # Select random Pokemon from results
             pokemon = random.choice(response.data)
             
-            # Generate QTE sequence based on stats
-            sequence = CatchService.calculate_qte_difficulty(pokemon['stats_total'], difficulty)
+            # Parse sprites
+            sprites = pokemon.get('sprites', {})
+            if isinstance(sprites, str):
+                import json
+                sprites = json.loads(sprites)
             
-            # Get sprite (prefer official, fallback to default)
-            sprite = pokemon.get('sprite_official') or pokemon.get('sprite_default')
+            # Get sprite URL
+            sprite_url = (
+                sprites.get('front_default') or 
+                sprites.get('other', {}).get('official-artwork', {}).get('front_default') or
+                f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemon['id']}.png"
+            )
+            
+            # Calculate QTE sequence
+            sequence = CatchService.calculate_qte_difficulty(pokemon['stats_total'], difficulty)
             
             return CatchChallenge(
                 pokemon_id=pokemon['id'],
-                pokemon_name=pokemon['name'],
-                pokemon_sprite=sprite,
+                pokemon_name=pokemon['name'].capitalize(),
+                pokemon_sprite=sprite_url,
                 stats_total=pokemon['stats_total'],
                 sequence=sequence,
                 difficulty=difficulty
@@ -142,7 +150,7 @@ class CatchService:
     ) -> CatchResult:
         """
         Record catch attempt and handle success/failure
-        NOW INCLUDES: XP rewards for both success and failure
+        UPDATED: XP rewards based on difficulty level
         """
         try:
             # Calculate accuracy
@@ -158,6 +166,14 @@ class CatchService:
             
             pokemon_name = pokemon_response.data[0]['name'].capitalize()
             
+            # Get difficulty from attempt (default to medium if not provided)
+            difficulty = attempt.difficulty or "medium"
+            
+            # Get XP amount based on difficulty and success
+            xp_amount = ExperienceService.get_xp_for_difficulty(difficulty, attempt.success)
+            
+            print(f"[CATCH] Difficulty: {difficulty}, Success: {attempt.success}, XP: {xp_amount}")
+            
             # Handle success
             if attempt.success:
                 # Check if already captured
@@ -166,14 +182,11 @@ class CatchService:
                 ).eq('pokemon_id', attempt.pokemon_id).execute()
                 
                 # Award XP for successful catch
-                xp_result = await ExperienceService.award_experience(
-                    trainer_id, 
-                    ExperienceService.XP_CATCH_SUCCESS
-                )
+                xp_result = await ExperienceService.award_experience(trainer_id, xp_amount)
                 
                 if existing.data:
                     message = f"You already caught {pokemon_name}! But nice catch anyway!"
-                    reward_message = f"+{ExperienceService.XP_CATCH_SUCCESS} XP"
+                    reward_message = f"+{xp_amount} XP"
                 else:
                     # Capture the Pokemon
                     capture_data = {
@@ -184,7 +197,7 @@ class CatchService:
                     supabase.table('captured_pokemon').insert(capture_data).execute()
                     
                     message = f"Congratulations! You caught {pokemon_name}!"
-                    reward_message = f"+{ExperienceService.XP_CATCH_SUCCESS} XP"
+                    reward_message = f"+{xp_amount} XP"
                     
                     # Perfect catch bonus message
                     if attempt.perfect:
@@ -207,14 +220,11 @@ class CatchService:
                     leveled_up=xp_result["leveled_up"]
                 )
             else:
-                # Failed catch - still award consolation XP
-                xp_result = await ExperienceService.award_experience(
-                    trainer_id, 
-                    ExperienceService.XP_CATCH_FAIL
-                )
+                # Failed catch - still award consolation XP (half amount)
+                xp_result = await ExperienceService.award_experience(trainer_id, xp_amount)
                 
                 message = f"{pokemon_name} broke free! Try again!"
-                reward_message = f"+{ExperienceService.XP_CATCH_FAIL} XP for trying"
+                reward_message = f"+{xp_amount} XP for trying"
                 
                 # Add level up messages if applicable
                 if xp_result["leveled_up"]:
@@ -252,80 +262,68 @@ class CatchService:
     
     @staticmethod
     async def get_available_habitats(region: Optional[str] = None) -> list:
-        """
-        Get list of available habitats from database
-        If region is provided, only return habitats that exist in that region
-        """
+        """Get list of available habitats, optionally filtered by region"""
         try:
-            query = supabase.table('pokemon').select('habitat').not_.is_('habitat', 'null')
+            query = supabase.table('pokemon').select('habitat')
             
-            if region:
+            if region and region.lower() != 'any':
                 query = query.eq('region', region.lower())
             
             response = query.execute()
             
+            # Extract unique habitats
             habitats = set()
-            for row in response.data:
-                if row['habitat']:
-                    habitats.add(row['habitat'])
+            for p in response.data:
+                if p.get('habitat'):
+                    habitats.add(p['habitat'])
             
             return sorted(list(habitats))
+            
         except Exception as e:
-            print(f"Error fetching habitats: {e}")
-            # Return common habitats as fallback
-            return [
-                'grassland', 'forest', 'waters-edge', 'sea', 'cave',
-                'mountain', 'rough-terrain', 'urban', 'rare'
-            ]
+            print(f"Error getting habitats: {e}")
+            return []
     
     @staticmethod
     async def get_available_difficulties(
         region: Optional[str] = None,
         habitat: Optional[str] = None
     ) -> list:
-        """
-        Get list of available difficulty levels based on what Pokemon exist
-        Filters by region and/or habitat if provided
-        """
+        """Get list of available difficulty levels based on Pokemon in region/habitat"""
         try:
             query = supabase.table('pokemon').select('stats_total')
             
-            if region:
+            if region and region.lower() != 'any':
                 query = query.eq('region', region.lower())
             
-            if habitat:
+            if habitat and habitat.lower() != 'any':
                 query = query.eq('habitat', habitat.lower())
             
             response = query.execute()
             
             if not response.data:
-                return []
+                return ['medium']  # Default fallback
             
-            # Get all stat totals
-            stat_totals = [row['stats_total'] for row in response.data]
+            # Determine which difficulties have Pokemon available
+            difficulties = set()
+            for p in response.data:
+                stats = p.get('stats_total', 0)
+                if stats < 301:
+                    difficulties.add('weak')
+                elif stats < 401:
+                    difficulties.add('easy')
+                elif stats < 501:
+                    difficulties.add('medium')
+                elif stats < 601:
+                    difficulties.add('hard')
+                elif stats < 721:
+                    difficulties.add('legendary')
+                else:
+                    difficulties.add('mythical')
             
-            # Determine which difficulties are available
-            available = []
-            
-            # Check each difficulty range
-            if any(180 <= s <= 300 for s in stat_totals):
-                available.append('weak')
-            if any(301 <= s <= 400 for s in stat_totals):
-                available.append('easy')
-            if any(401 <= s <= 500 for s in stat_totals):
-                available.append('medium')
-            if any(501 <= s <= 600 for s in stat_totals):
-                available.append('hard')
-            if any(601 <= s <= 720 for s in stat_totals):
-                available.append('legendary')
-            if any(s >= 721 for s in stat_totals):
-                available.append('mythical')
-            
-            return available
+            # Return in order
+            order = ['weak', 'easy', 'medium', 'hard', 'legendary', 'mythical']
+            return [d for d in order if d in difficulties]
             
         except Exception as e:
-            print(f"Error fetching difficulties: {e}")
-            # Return all difficulties as fallback
+            print(f"Error getting difficulties: {e}")
             return ['weak', 'easy', 'medium', 'hard', 'legendary', 'mythical']
-
-

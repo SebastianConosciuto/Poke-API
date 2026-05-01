@@ -1,5 +1,5 @@
-import React, { useMemo, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Container, Box, Typography, Alert, CircularProgress } from '@mui/material';
 import { styled, keyframes } from '@mui/material/styles';
 import { Icon } from '@iconify/react';
@@ -175,6 +175,7 @@ const ProgressText = styled(Typography)({
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   
@@ -188,24 +189,39 @@ const Dashboard: React.FC = () => {
     return POKEMON_QUOTES[randomIndex];
   }, []);
 
-  // Fetch user stats
+  // FIX: Memoized fetchStats function
+  const fetchStats = useCallback(async () => {
+    try {
+      setLoading(true);
+      const userStats = await authService.getStats();
+      setStats(userStats);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+      setError('Failed to load statistics');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // FIX: Fetch stats on mount AND when navigating back to dashboard
+  // The location.key changes when navigation occurs, triggering a refresh
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        const userStats = await authService.getStats();
-        setStats(userStats);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch stats:', err);
-        setError('Failed to load statistics');
-      } finally {
-        setLoading(false);
-      }
+    fetchStats();
+  }, [fetchStats, location.key]);
+
+  // FIX: Also listen for window focus to refresh stats
+  // This handles cases where user switches tabs/windows
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchStats();
     };
 
-    fetchStats();
-  }, []);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchStats]);
 
   const handleLogout = () => {
     dispatch(logout());
