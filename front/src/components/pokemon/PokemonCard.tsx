@@ -1,26 +1,44 @@
-import React from 'react';
-import { Box, Typography, Chip } from '@mui/material';
+/**
+ * PokemonCard — grid tile for a single Pokemon.
+ *
+ * Pure presentation: takes a PokemonBasic and a click handler. All shared
+ * helpers (sprite fallback, ID formatting, type chip) come from common modules.
+ */
+
+import { Box, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { Icon } from '@iconify/react';
-import PixelCard from '../common/PixelCard';
-import PixelButton from '../common/PixelButton';
+import React from 'react';
+
+import {
+  PixelButton,
+  PixelCard,
+  TypeChip,
+} from '../common';
+import {
+  formatHeightMeters,
+  formatWeightKilograms,
+  getBasicSpriteUrl,
+  padPokemonId,
+} from '../../utils';
 import type { PokemonBasic } from '../../services/pokemonService';
 
-const CardContainer = styled(PixelCard)(({ theme }) => ({
+// ----- Styled bits ---------------------------------------------------
+
+const CardContainer = styled(PixelCard)({
   cursor: 'pointer',
   transition: 'transform 0.2s ease, box-shadow 0.2s ease',
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
   position: 'relative',
-  
   '&:hover': {
     transform: 'translate(-2px, -2px)',
     boxShadow: '10px 10px 0px rgba(0, 0, 0, 0.25)',
   },
-}));
+});
 
-const CaptureIndicator = styled(Box)(({ theme }) => ({
+const CaptureIndicator = styled(Box)({
   position: 'absolute',
   top: '8px',
   right: '8px',
@@ -33,16 +51,16 @@ const CaptureIndicator = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   justifyContent: 'center',
   boxShadow: '2px 2px 0px rgba(0, 0, 0, 0.2)',
-}));
+});
 
-const PokemonImage = styled('img')(({ theme }) => ({
+const PokemonImage = styled('img')({
   width: '120px',
   height: '120px',
   margin: '0 auto',
   display: 'block',
   imageRendering: 'pixelated',
   filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1))',
-}));
+});
 
 const PokemonId = styled(Typography)(({ theme }) => ({
   fontFamily: '"Press Start 2P", monospace',
@@ -69,43 +87,6 @@ const TypesContainer = styled(Box)(({ theme }) => ({
   flexWrap: 'wrap',
 }));
 
-const TypeChip = styled(Chip)<{ pokemonType: string }>(({ theme, pokemonType }) => {
-  const typeColors: { [key: string]: string } = {
-    normal: '#A8A878',
-    fire: '#F08030',
-    water: '#6890F0',
-    electric: '#F8D030',
-    grass: '#78C850',
-    ice: '#98D8D8',
-    fighting: '#C03028',
-    poison: '#A040A0',
-    ground: '#E0C068',
-    flying: '#A890F0',
-    psychic: '#F85888',
-    bug: '#A8B820',
-    rock: '#B8A038',
-    ghost: '#705898',
-    dragon: '#7038F8',
-    dark: '#705848',
-    steel: '#B8B8D0',
-    fairy: '#EE99AC',
-  };
-
-  return {
-    backgroundColor: typeColors[pokemonType] || '#777',
-    color: '#fff',
-    fontFamily: '"Roboto Mono", monospace',
-    fontSize: '0.7rem',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    border: '2px solid #000',
-    borderRadius: 0,
-    '& .MuiChip-label': {
-      padding: '0 8px',
-    },
-  };
-});
-
 const StatsText = styled(Typography)(({ theme }) => ({
   fontFamily: '"Roboto Mono", monospace',
   fontSize: '0.75rem',
@@ -113,69 +94,66 @@ const StatsText = styled(Typography)(({ theme }) => ({
   marginBottom: theme.spacing(0.5),
 }));
 
+// ----- Component -----------------------------------------------------
+
 interface PokemonCardProps {
   pokemon: PokemonBasic;
   onViewDetails: (pokemon: PokemonBasic) => void;
 }
 
 const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onViewDetails }) => {
+  const handleDetailsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onViewDetails(pokemon);
+  };
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.src = '/placeholder-pokemon.png';
+  };
+
   return (
     <CardContainer showLight showIndicators>
-      {/* Capture Indicator - Show pokeball if captured */}
       {pokemon.is_captured && (
         <CaptureIndicator>
-          <Icon 
-            icon="game-icons:pokecog" 
-            width={20} 
+          <Icon
+            icon="game-icons:pokecog"
+            width={20}
             height={20}
             style={{ color: '#EF5350' }}
           />
         </CaptureIndicator>
       )}
-      
+
       <Box sx={{ flexGrow: 1 }}>
-        <PokemonId>#{pokemon.id.toString().padStart(3, '0')}</PokemonId>
-        
+        <PokemonId>#{padPokemonId(pokemon.id)}</PokemonId>
+
         <PokemonImage
-          src={pokemon.sprite || '/placeholder-pokemon.png'}
+          src={getBasicSpriteUrl(pokemon.sprite)}
           alt={pokemon.name}
           loading="lazy"
-          onError={(e) => {
-            e.currentTarget.src = '/placeholder-pokemon.png';
-          }}
+          onError={handleImageError}
         />
-        
+
         <PokemonName>{pokemon.name}</PokemonName>
-        
+
         <TypesContainer>
           {pokemon.types.map((type) => (
-            <TypeChip
-              key={type}
-              label={type}
-              pokemonType={type}
-              size="small"
-            />
+            <TypeChip key={type} type={type} />
           ))}
         </TypesContainer>
-        
+
         <StatsText>
-          H: {(pokemon.height / 10).toFixed(1)}m | W: {(pokemon.weight / 10).toFixed(1)}kg
+          H: {formatHeightMeters(pokemon.height)} | W:{' '}
+          {formatWeightKilograms(pokemon.weight)}
         </StatsText>
-        
+
         <StatsText sx={{ fontWeight: 'bold', color: 'primary.main' }}>
           Stats: {pokemon.stats_total}
         </StatsText>
       </Box>
-      
+
       <Box sx={{ mt: 2 }}>
-        <PixelButton
-          fullWidth
-          onClick={(e) => {
-            e.stopPropagation();
-            onViewDetails(pokemon);
-          }}
-          size="small"
-        >
+        <PixelButton fullWidth onClick={handleDetailsClick} size="small">
           Details
         </PixelButton>
       </Box>

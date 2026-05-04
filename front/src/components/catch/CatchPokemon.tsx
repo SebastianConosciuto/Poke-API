@@ -1,72 +1,59 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+/**
+ * CatchPokemon — landing page for the catching minigame.
+ *
+ * Picks region/habitat/difficulty, kicks off a catch attempt via the catch
+ * slice, and renders the QTE minigame as a modal once the backend returns
+ * a challenge. Repeated UI bits live in catchPokemon/* sub-components.
+ */
+
 import {
-  Container,
   Box,
-  Typography,
-  Select,
-  MenuItem,
-  FormControl,
+  Container,
   InputLabel,
-  Snackbar,
-  Alert,
-} from "@mui/material";
-import { styled, keyframes } from "@mui/material/styles";
-import { Icon } from "@iconify/react";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
+  MenuItem,
+  Select,
+  Typography,
+} from '@mui/material';
+import { Icon } from '@iconify/react';
+import { styled } from '@mui/material/styles';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import {
-  fetchCatchOptions,
-  fetchHabitats,
-  fetchDifficulties,
-  startCatchAttempt,
-  completeCatchAttempt,
+  PageContainer,
+  PageHeader,
+  PixelButton,
+  PixelCard,
+  PixelSelect,
+  PixelSnackbar,
+} from '../common';
+import {
+  ANY_FILTER_VALUE,
+  DIFFICULTY_TIERS,
+  REGION_BACKGROUNDS,
+  PIXEL_GRID_OVERLAY,
+  isAnyFilter,
+  type DifficultyKey,
+} from '../../constants';
+import {
   clearChallenge,
   clearResult,
-} from "../../features/catch/catchSlice";
-import { fetchPokemonList } from "../../features/pokemon/pokemonSlice";
-import PixelButton from "../common/PixelButton";
-import PixelCard from "../common/PixelCard";
-import { QTEMinigame } from "./QTEMinigame";
+  completeCatchAttempt,
+  fetchCatchOptions,
+  fetchDifficulties,
+  fetchHabitats,
+  startCatchAttempt,
+} from '../../features/catch/catchSlice';
+import { fetchPokemonList } from '../../features/pokemon/pokemonSlice';
+import { useSnackbar } from '../../hooks';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { capitalize, formatHyphenated } from '../../utils';
+import { animations } from '../../styles/animations';
+import CatchInstructions from './catchPokemon/CatchInstructions';
+import DifficultyMenuItem from './catchPokemon/DifficultyMenuItem';
+import { QTEMinigame } from './QTEMinigame';
 
-// Animations
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-const slideIn = keyframes`
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
-`;
-
-const animations = { fadeIn, slideIn };
-
-// Styled components
-const PageContainer = styled(Box)(({ theme }) => ({
-  minHeight: "100vh",
-  backgroundColor: "#E8F5E9",
-  padding: theme.spacing(4),
-  transition: "background 0.5s ease",
-}));
-
-const Header = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.primary.main,
-  padding: theme.spacing(3),
-  marginBottom: theme.spacing(4),
-  border: "4px solid #000",
-  boxShadow: "8px 8px 0px rgba(0, 0, 0, 0.25)",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  animation: `${animations.slideIn} 0.5s ease-out`,
-}));
-
-const Title = styled(Typography)({
-  fontFamily: '"Press Start 2P", monospace',
-  fontSize: "1.5rem",
-  color: "#fff",
-  textShadow: "3px 3px 0px rgba(0, 0, 0, 0.3)",
-});
+// ----- Styled bits ---------------------------------------------------
 
 const SectionCard = styled(PixelCard)(({ theme }) => ({
   marginBottom: theme.spacing(4),
@@ -75,46 +62,39 @@ const SectionCard = styled(PixelCard)(({ theme }) => ({
 
 const SectionTitle = styled(Typography)(({ theme }) => ({
   fontFamily: '"Press Start 2P", monospace',
-  fontSize: "1rem",
+  fontSize: '1rem',
   color: theme.palette.secondary.main,
   marginBottom: theme.spacing(3),
 }));
 
 const InfoText = styled(Typography)(({ theme }) => ({
   fontFamily: '"Roboto Mono", monospace',
-  fontSize: "1rem",
+  fontSize: '1rem',
   color: theme.palette.text.primary,
   marginBottom: theme.spacing(3),
   lineHeight: 1.8,
 }));
 
-const StyledFormControl = styled(FormControl)({
-  "& .MuiInputLabel-root": {
-    fontFamily: '"Roboto Mono", monospace',
-    fontSize: "0.9rem",
-  },
-  "& .MuiSelect-select": {
-    fontFamily: '"Roboto Mono", monospace',
-    fontSize: "0.9rem",
-  },
-  "& .MuiMenuItem-root": {
-    fontFamily: '"Roboto Mono", monospace',
-    fontSize: "0.8rem",
-  },
+const HelperText = styled(Typography)({
+  fontSize: '0.75rem',
+  color: 'text.secondary',
+  fontFamily: '"Roboto Mono", monospace',
+  marginTop: '8px',
 });
 
-// Region background gradients
-const REGION_BACKGROUNDS: Record<string, { gradient: string }> = {
-  kanto: { gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" },
-  johto: { gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" },
-  hoenn: { gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" },
-  sinnoh: { gradient: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)" },
-  unova: { gradient: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)" },
-  kalos: { gradient: "linear-gradient(135deg, #30cfd0 0%, #330867 100%)" },
-  alola: { gradient: "linear-gradient(135deg, #ffa751 0%, #ffe259 100%)" },
-  galar: { gradient: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)" },
-  paldea: { gradient: "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)" },
+// ----- Helpers -------------------------------------------------------
+
+const getRegionBackground = (region: string) => {
+  if (isAnyFilter(region)) return {};
+  const regionBg = REGION_BACKGROUNDS[region.toLowerCase()];
+  if (!regionBg) return {};
+  return {
+    background: regionBg.gradient,
+    backgroundImage: `${regionBg.gradient}, ${PIXEL_GRID_OVERLAY}`,
+  };
 };
+
+// ----- Component -----------------------------------------------------
 
 const CatchPokemon: React.FC = () => {
   const navigate = useNavigate();
@@ -131,88 +111,59 @@ const CatchPokemon: React.FC = () => {
     isLoadingDifficulties,
   } = useAppSelector((state) => state.catch);
 
-  const [region, setRegion] = useState("any");
-  const [habitat, setHabitat] = useState("any");
-  const [difficulty, setDifficulty] = useState<
-    "weak" | "easy" | "medium" | "hard" | "legendary" | "mythical"
-  >("medium");
-
+  const [region, setRegion] = useState<string>(ANY_FILTER_VALUE);
+  const [habitat, setHabitat] = useState<string>(ANY_FILTER_VALUE);
+  const [difficulty, setDifficulty] = useState<DifficultyKey>('medium');
   const [showGame, setShowGame] = useState(false);
 
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "success" as "success" | "error" | "info",
-  });
+  const { snackbar, show: showSnackbar, close: closeSnackbar } = useSnackbar();
 
-  // Fetch initial regions on mount
+  // ----- Initial fetches ---------------------------------------------
   useEffect(() => {
-    if (regions.length === 0) {
-      dispatch(fetchCatchOptions());
-    }
+    if (regions.length === 0) dispatch(fetchCatchOptions());
   }, [dispatch, regions.length]);
 
-  // Fetch habitats when region changes
+  // ----- Re-fetch habitats when region changes -----------------------
   useEffect(() => {
-    if (region && region !== "any") {
-      dispatch(fetchHabitats(region));
-      setHabitat("any"); // Reset habitat selection
-    } else if (region === "any") {
-      dispatch(fetchHabitats(undefined));
-    }
+    dispatch(fetchHabitats(isAnyFilter(region) ? undefined : region));
+    setHabitat(ANY_FILTER_VALUE);
   }, [region, dispatch]);
 
-  // Fetch difficulties when region or habitat changes
+  // ----- Re-fetch difficulties when filters change -------------------
   useEffect(() => {
-    const regionFilter = region !== "any" ? region : undefined;
-    const habitatFilter = habitat !== "any" ? habitat : undefined;
-
-    if (regionFilter || habitatFilter) {
-      dispatch(
-        fetchDifficulties({ region: regionFilter, habitat: habitatFilter })
-      );
-    } else {
-      // Fetch all difficulties if no filters
-      dispatch(fetchDifficulties({}));
-    }
+    dispatch(
+      fetchDifficulties({
+        region: isAnyFilter(region) ? undefined : region,
+        habitat: isAnyFilter(habitat) ? undefined : habitat,
+      }),
+    );
   }, [region, habitat, dispatch]);
 
-  // Handle catch result
+  // ----- Handle catch result -----------------------------------------
   useEffect(() => {
-    if (lastResult) {
-      let message = lastResult.message;
+    if (!lastResult) return;
 
-      // Add XP info to message
-      if (lastResult.reward_message) {
-        message += ` ${lastResult.reward_message}`;
-      }
+    const message = lastResult.reward_message
+      ? `${lastResult.message} ${lastResult.reward_message}`
+      : lastResult.message;
+    showSnackbar(message, lastResult.success ? 'success' : 'error');
 
-      showSnackbar(message, lastResult.success ? "success" : "error");
-
-      // Refresh Pokemon list if successful catch
-      if (lastResult.success) {
-        setTimeout(() => {
-          dispatch(
-            fetchPokemonList({
-              page: 1,
-              page_size: 20,
-            })
-          );
-        }, 1000);
-      }
-
-      dispatch(clearResult());
+    if (lastResult.success) {
+      // Refresh the Pokedex list so the new capture appears.
+      setTimeout(() => {
+        dispatch(fetchPokemonList({ page: 1, page_size: 20 }));
+      }, 1000);
     }
-  }, [lastResult, dispatch]);
 
+    dispatch(clearResult());
+  }, [lastResult, dispatch, showSnackbar]);
+
+  // ----- Catch lifecycle ---------------------------------------------
   const handleStartCatch = async () => {
-    // Start the catch attempt
     const result = await dispatch(
-      startCatchAttempt({ region, habitat, difficulty })
+      startCatchAttempt({ region, habitat, difficulty }),
     );
-
     if (startCatchAttempt.fulfilled.match(result)) {
-      // Show game (countdown is integrated inside QTEMinigame)
       setShowGame(true);
     }
   };
@@ -225,7 +176,6 @@ const CatchPokemon: React.FC = () => {
     perfect: boolean;
   }) => {
     if (!currentChallenge) return;
-
     dispatch(
       completeCatchAttempt({
         pokemon_id: currentChallenge.pokemon_id,
@@ -235,9 +185,8 @@ const CatchPokemon: React.FC = () => {
         time_taken: result.timeTaken,
         perfect: result.perfect,
         difficulty: currentChallenge.difficulty,
-      })
+      }),
     );
-
     setShowGame(false);
     dispatch(clearChallenge());
   };
@@ -247,330 +196,111 @@ const CatchPokemon: React.FC = () => {
     dispatch(clearChallenge());
   };
 
-  const showSnackbar = (
-    message: string,
-    severity: "success" | "error" | "info"
-  ) => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  // Get background style based on selected region
-  const getRegionBackground = () => {
-    if (!region || region === "any") return {};
-    const regionBg = REGION_BACKGROUNDS[region.toLowerCase()];
-    if (!regionBg) return {};
-
-    return {
-      background: regionBg.gradient,
-      backgroundImage: `
-        ${regionBg.gradient},
-        repeating-linear-gradient(
-          90deg,
-          transparent,
-          transparent 20px,
-          rgba(0, 0, 0, 0.02) 20px,
-          rgba(0, 0, 0, 0.02) 40px
-        ),
-        repeating-linear-gradient(
-          0deg,
-          transparent,
-          transparent 20px,
-          rgba(0, 0, 0, 0.02) 20px,
-          rgba(0, 0, 0, 0.02) 40px
-        )
-      `,
-    };
-  };
+  // ----- Render -------------------------------------------------------
+  const startDisabled =
+    !region || !habitat || isLoading || difficulties.length === 0;
 
   return (
-    <PageContainer sx={getRegionBackground()}>
+    <PageContainer bgColor="#E8F5E9" sx={getRegionBackground(region)}>
       <Container maxWidth="lg">
-        <Header>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <PageHeader
+          title="Catch Pokemon"
+          leftAdornment={
             <Icon
               icon="game-icons:perspective-dice-six"
               width="32"
               height="32"
-              style={{ color: "#fff" }}
+              style={{ color: '#fff' }}
             />
-            <Title>Catch Pokemon</Title>
-          </Box>
-          <PixelButton
-            onClick={() => navigate("/dashboard")}
-            pixelColor="#666"
-            size="small"
-          >
-            Back
-          </PixelButton>
-        </Header>
+          }
+          actions={
+            <PixelButton
+              onClick={() => navigate('/dashboard')}
+              pixelColor="#666"
+              size="small"
+            >
+              Back
+            </PixelButton>
+          }
+        />
 
         <SectionCard>
           <SectionTitle>Select Hunting Ground</SectionTitle>
 
-          <InfoText>
-            ▸ Choose a region and habitat to find wild Pokemon
-            <br />
-            ▸ Select "Any" to search across all regions/habitats
-            <br />
-            ▸ Available options update based on your selection
-            <br />▸ Stronger Pokemon = more buttons & less time in QTE
+          <InfoText as="div">
+            ▸ Choose a region and habitat to find wild Pokemon<br />
+            ▸ Select "Any" to search across all regions/habitats<br />
+            ▸ Available options update based on your selection<br />
+            ▸ Stronger Pokemon = more buttons & less time in QTE
           </InfoText>
 
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 4 }}>
-            {/* Region Selection */}
-            <StyledFormControl fullWidth>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 4 }}>
+            <PixelSelect>
               <InputLabel>Region</InputLabel>
               <Select
                 value={region}
-                onChange={(e) => setRegion(e.target.value)}
+                onChange={(e) => setRegion(e.target.value as string)}
                 label="Region"
                 disabled={isLoadingOptions}
               >
-                <MenuItem value="any">
-                  <em>Any Region</em>
-                </MenuItem>
+                <MenuItem value={ANY_FILTER_VALUE}><em>Any Region</em></MenuItem>
                 {regions.map((r) => (
-                  <MenuItem key={r} value={r}>
-                    {r.charAt(0).toUpperCase() + r.slice(1)}
-                  </MenuItem>
+                  <MenuItem key={r} value={r}>{capitalize(r)}</MenuItem>
                 ))}
               </Select>
-            </StyledFormControl>
+            </PixelSelect>
 
-            {/* Habitat Selection */}
-            <StyledFormControl fullWidth>
+            <PixelSelect>
               <InputLabel>Habitat</InputLabel>
               <Select
                 value={habitat}
-                onChange={(e) => setHabitat(e.target.value)}
+                onChange={(e) => setHabitat(e.target.value as string)}
                 label="Habitat"
                 disabled={
                   isLoadingHabitats ||
                   !region ||
-                  (region === "any" && habitats.length === 0)
+                  (region === ANY_FILTER_VALUE && habitats.length === 0)
                 }
               >
-                <MenuItem value="any">
-                  <em>Any Habitat</em>
-                </MenuItem>
+                <MenuItem value={ANY_FILTER_VALUE}><em>Any Habitat</em></MenuItem>
                 {habitats.map((h) => (
-                  <MenuItem key={h} value={h}>
-                    {h
-                      .split("-")
-                      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                      .join(" ")}
-                  </MenuItem>
+                  <MenuItem key={h} value={h}>{formatHyphenated(h)}</MenuItem>
                 ))}
               </Select>
-              {isLoadingHabitats && (
-                <Typography
-                  sx={{
-                    fontSize: "0.75rem",
-                    color: "text.secondary",
-                    mt: 1,
-                    fontFamily: '"Roboto Mono", monospace',
-                  }}
-                >
-                  Loading available habitats...
-                </Typography>
-              )}
-            </StyledFormControl>
+              {isLoadingHabitats && <HelperText>Loading available habitats...</HelperText>}
+            </PixelSelect>
 
-            {/* Difficulty Selection */}
-            <StyledFormControl fullWidth>
+            <PixelSelect>
               <InputLabel>Difficulty</InputLabel>
               <Select
                 value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value as any)}
+                onChange={(e) => setDifficulty(e.target.value as DifficultyKey)}
                 label="Difficulty"
                 disabled={isLoadingDifficulties}
               >
-                {/* Only show difficulties that are available */}
-                {difficulties.includes("weak") && (
-                  <MenuItem value="weak">
-                    <Box>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontWeight: "bold",
-                          color: "#8BC34A",
-                        }}
-                      >
-                        180-300 (Weak)
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontSize: "0.75rem",
-                          color: "#666",
-                        }}
-                      >
-                        3 buttons, 1.5s per button
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                )}
-                {difficulties.includes("easy") && (
-                  <MenuItem value="easy">
-                    <Box>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontWeight: "bold",
-                          color: "#4CAF50",
-                        }}
-                      >
-                        301-400 (Easy)
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontSize: "0.75rem",
-                          color: "#666",
-                        }}
-                      >
-                        4 buttons, 1.2s per button
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                )}
-                {difficulties.includes("medium") && (
-                  <MenuItem value="medium">
-                    <Box>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontWeight: "bold",
-                          color: "#FF9800",
-                        }}
-                      >
-                        401-500 (Medium)
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontSize: "0.75rem",
-                          color: "#666",
-                        }}
-                      >
-                        5 buttons, 1.0s per button
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                )}
-                {difficulties.includes("hard") && (
-                  <MenuItem value="hard">
-                    <Box>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontWeight: "bold",
-                          color: "#F44336",
-                        }}
-                      >
-                        501-600 (Hard)
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontSize: "0.75rem",
-                          color: "#666",
-                        }}
-                      >
-                        6 buttons, 0.8s per button
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                )}
-                {difficulties.includes("legendary") && (
-                  <MenuItem value="legendary">
-                    <Box>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontWeight: "bold",
-                          color: "#9C27B0",
-                        }}
-                      >
-                        601-720 (Legendary)
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontSize: "0.75rem",
-                          color: "#666",
-                        }}
-                      >
-                        7 buttons, 0.6s per button
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                )}
-                {difficulties.includes("mythical") && (
-                  <MenuItem value="mythical">
-                    <Box>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontWeight: "bold",
-                          color: "#FF1744",
-                        }}
-                      >
-                        721+ (Mythical)
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Roboto Mono", monospace',
-                          fontSize: "0.75rem",
-                          color: "#666",
-                        }}
-                      >
-                        8 buttons, 0.5s per button
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                )}
+                {DIFFICULTY_TIERS.filter((tier) =>
+                  difficulties.includes(tier.key),
+                ).map((tier) => (
+                  <DifficultyMenuItem key={tier.key} tier={tier} />
+                ))}
               </Select>
               {isLoadingDifficulties && (
-                <Typography
-                  sx={{
-                    fontSize: "0.75rem",
-                    color: "text.secondary",
-                    mt: 1,
-                    fontFamily: '"Roboto Mono", monospace',
-                  }}
-                >
-                  Loading available difficulties...
-                </Typography>
+                <HelperText>Loading available difficulties...</HelperText>
               )}
               {!isLoadingDifficulties &&
                 difficulties.length === 0 &&
-                (region !== "any" || habitat !== "any") && (
-                  <Typography
-                    sx={{
-                      fontSize: "0.75rem",
-                      color: "error.main",
-                      mt: 1,
-                      fontFamily: '"Roboto Mono", monospace',
-                    }}
-                  >
+                (region !== ANY_FILTER_VALUE || habitat !== ANY_FILTER_VALUE) && (
+                  <HelperText sx={{ color: 'error.main' }}>
                     No Pokemon available for this combination
-                  </Typography>
+                  </HelperText>
                 )}
-            </StyledFormControl>
+            </PixelSelect>
           </Box>
 
-          {/* Action Buttons */}
-          <Box sx={{ display: "flex", gap: 2, mt: 4 }}>
+          <Box sx={{ display: 'flex', gap: 2, mt: 4 }}>
             <PixelButton
               onClick={handleStartCatch}
-              disabled={
-                !region || !habitat || isLoading || difficulties.length === 0
-              }
+              disabled={startDisabled}
               pixelColor="#4CAF50"
               fullWidth
               startIcon={
@@ -581,10 +311,10 @@ const CatchPokemon: React.FC = () => {
                 />
               }
             >
-              {isLoading ? "Searching..." : "Start Catch!"}
+              {isLoading ? 'Searching...' : 'Start Catch!'}
             </PixelButton>
             <PixelButton
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate('/dashboard')}
               pixelColor="#666"
             >
               Cancel
@@ -592,69 +322,8 @@ const CatchPokemon: React.FC = () => {
           </Box>
         </SectionCard>
 
-        {/* Instructions Card */}
-        <SectionCard>
-          <SectionTitle>How to Play</SectionTitle>
+        <CatchInstructions />
 
-          <InfoText>
-            <strong>1. Select Location:</strong> Choose region and habitat (or
-            "Any")
-            <br />
-            <strong>2. Choose Difficulty:</strong> Only available difficulties
-            shown
-            <br />
-            • Weak: 180-300 stats - Easier QTE
-            <br />
-            • Easy: 301-400 stats - Easier QTE
-            <br />
-            • Medium: 401-500 stats - Moderate QTE
-            <br />
-            • Hard: 501-600 stats - Challenging QTE
-            <br />
-            • Legendary: 601-720 stats - Very Hard QTE
-            <br />
-            • Mythical: 721+ stats - Extreme QTE
-            <br />
-            <strong>3. Start Catch:</strong> Random Pokemon appears
-            <br />
-            <strong>4. Countdown:</strong> 3... 2... 1... Get ready!
-            <br />
-            <strong>5. QTE Challenge:</strong> Press arrow keys as they appear
-            <br />
-            <strong>6. Success:</strong> Add Pokemon to your Pokedex and gain
-            XP!
-          </InfoText>
-
-          <Box
-            sx={{
-              mt: 2,
-              p: 2,
-              backgroundColor: "rgba(59, 76, 202, 0.05)",
-              border: "2px solid",
-              borderColor: "secondary.main",
-            }}
-          >
-            <Typography
-              sx={{
-                fontFamily: '"Roboto Mono", monospace',
-                fontSize: "0.85rem",
-                color: "text.secondary",
-              }}
-            >
-              💡 <strong>Smart Filters:</strong> Options update based on
-              available Pokemon
-              <br />⚡ <strong>XP Rewards:</strong> Higher difficulty = More XP!
-              <br />
-              &nbsp;&nbsp;• Weak: 10 XP | Easy: 20 XP | Medium: 30 XP
-              <br />
-              &nbsp;&nbsp;• Hard: 40 XP | Legendary: 50 XP | Mythical: 60 XP
-              <br />
-              🌍 <strong>Tip:</strong> Select "Any" to search everywhere!
-            </Typography>
-          </Box>
-        </SectionCard>
-
-        {/* QTE Minigame Modal */}
         {showGame && currentChallenge && (
           <QTEMinigame
             open={showGame}
@@ -667,25 +336,12 @@ const CatchPokemon: React.FC = () => {
           />
         )}
 
-        {/* Snackbar for notifications */}
-        <Snackbar
+        <PixelSnackbar
           open={snackbar.open}
-          autoHideDuration={4000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        >
-          <Alert
-            onClose={handleCloseSnackbar}
-            severity={snackbar.severity}
-            sx={{
-              fontFamily: '"Roboto Mono", monospace',
-              border: "3px solid currentColor",
-              borderRadius: 0,
-            }}
-          >
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
+          message={snackbar.message}
+          severity={snackbar.severity}
+          onClose={closeSnackbar}
+        />
       </Container>
     </PageContainer>
   );

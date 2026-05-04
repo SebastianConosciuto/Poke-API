@@ -1,21 +1,29 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Dialog,
-  Box,
-  Typography,
-  LinearProgress,
-  IconButton,
-} from '@mui/material';
-import { styled, keyframes } from '@mui/material/styles';
-import CloseIcon from '@mui/icons-material/Close';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
-import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+/**
+ * QTEMinigame — the timed arrow-key challenge for catching a Pokemon.
+ *
+ * Game state lives in this file. Reusable behaviour (countdown, per-button
+ * timer, keyboard listener) lives in dedicated hooks. Constants such as
+ * arrow icons / labels and habitat backgrounds come from `../../constants`.
+ */
 
-// ========================================
-// ANIMATIONS
-// ========================================
+import { Box, Dialog, IconButton, LinearProgress, Typography } from '@mui/material';
+import { keyframes, styled } from '@mui/material/styles';
+import CloseIcon from '@mui/icons-material/Close';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+
+import {
+  ARROW_ICONS,
+  ARROW_NAMES,
+  HABITAT_BACKGROUNDS,
+  type ArrowKey,
+} from '../../constants';
+import {
+  useArrowKeyListener,
+  useCountdown,
+  useQTETimer,
+} from '../../hooks';
+
+// ----- Animations ----------------------------------------------------
 
 const pulseAnimation = keyframes`
   0%, 100% { transform: scale(1); }
@@ -40,53 +48,13 @@ const errorFlash = keyframes`
   100% { background-color: rgba(244, 67, 54, 0); }
 `;
 
-// ========================================
-// STYLED COMPONENTS
-// ========================================
+// ----- Styled bits ---------------------------------------------------
 
-// Habitat-specific background configurations
-const HABITAT_BACKGROUNDS: { [key: string]: { color: string; gradient: string } } = {
-  'grassland': {
-    color: '#1a3a1a',
-    gradient: 'linear-gradient(135deg, #1a4d1a 0%, #2d7a2d 100%)', // Bright green
-  },
-  'forest': {
-    color: '#0d2a0d',
-    gradient: 'linear-gradient(135deg, #0d3a0d 0%, #1a5a1a 100%)', // Deep forest green
-  },
-  'cave': {
-    color: '#1a1a2e',
-    gradient: 'linear-gradient(135deg, #1a1a2e 0%, #2a2a4e 100%)', // Dark blue
-  },
-  'mountain': {
-    color: '#3a3a3a',
-    gradient: 'linear-gradient(135deg, #4a4a4a 0%, #5a5a5a 100%)', // Light gray
-  },
-  'rare': {
-    color: '#3a1a4a',
-    gradient: 'linear-gradient(135deg, #4a1a5a 0%, #6a2a7a 100%)', // Vivid purple
-  },
-  'rough-terrain': {
-    color: '#4a3a2a',
-    gradient: 'linear-gradient(135deg, #5a4a3a 0%, #7a6a5a 100%)', // Brown/tan
-  },
-  'sea': {
-    color: '#1a2a4a',
-    gradient: 'linear-gradient(135deg, #1a3a5a 0%, #2a4a7a 100%)', // Ocean blue
-  },
-  'urban': {
-    color: '#2a2a2a',
-    gradient: 'linear-gradient(135deg, #3a3a3a 0%, #4a4a4a 100%)', // Dark gray
-  },
-  'waters-edge': {
-    color: '#1a3a3a',
-    gradient: 'linear-gradient(135deg, #2a4a4a 0%, #3a5a5a 100%)', // Teal
-  },
-};
+type FeedbackState = 'none' | 'correct' | 'wrong';
 
 const GameContainer = styled(Box, {
-  shouldForwardProp: (prop) => !['feedbackState'].includes(prop as string),
-})<{ feedbackState: 'none' | 'correct' | 'wrong' }>(({ feedbackState }) => ({
+  shouldForwardProp: (prop) => prop !== 'feedbackState',
+})<{ feedbackState: FeedbackState }>(({ feedbackState }) => ({
   backgroundColor: '#1a1a2e',
   padding: '2rem',
   borderRadius: '8px',
@@ -98,8 +66,12 @@ const GameContainer = styled(Box, {
   justifyContent: 'space-between',
   position: 'relative',
   transition: 'background 0.5s ease',
-  animation: feedbackState === 'correct' ? `${successFlash} 0.3s ease-out` :
-             feedbackState === 'wrong' ? `${errorFlash} 0.3s ease-out, ${shakeAnimation} 0.3s ease-out` : 'none',
+  animation:
+    feedbackState === 'correct'
+      ? `${successFlash} 0.3s ease-out`
+      : feedbackState === 'wrong'
+        ? `${errorFlash} 0.3s ease-out, ${shakeAnimation} 0.3s ease-out`
+        : 'none',
 }));
 
 const TitleText = styled(Typography)({
@@ -119,7 +91,6 @@ const PokemonSprite = styled('img')({
   filter: 'drop-shadow(0 0 10px rgba(255, 255, 255, 0.3))',
 });
 
-// Upcoming buttons (dimmed/smaller)
 const UpcomingButtonsContainer = styled(Box)({
   display: 'flex',
   gap: '0.5rem',
@@ -140,9 +111,8 @@ const UpcomingButton = styled(Box)({
   color: '#888',
 });
 
-// Current button (big, centered, pulsing)
 const CurrentButtonContainer = styled(Box, {
-  shouldForwardProp: (prop) => !['isPulsing'].includes(prop as string),
+  shouldForwardProp: (prop) => prop !== 'isPulsing',
 })<{ isPulsing: boolean }>(({ isPulsing }) => ({
   marginBottom: '1.5rem',
   animation: isPulsing ? `${pulseAnimation} 0.8s infinite` : 'none',
@@ -170,7 +140,6 @@ const InstructionText = styled(Typography)({
   textAlign: 'center',
 });
 
-// Timer section
 const TimerSection = styled(Box)({
   width: '100%',
   marginBottom: '1rem',
@@ -205,7 +174,7 @@ const StatsText = styled(Typography)({
 });
 
 const ResultText = styled(Typography, {
-  shouldForwardProp: (prop) => !['isSuccess'].includes(prop as string),
+  shouldForwardProp: (prop) => prop !== 'isSuccess',
 })<{ isSuccess: boolean }>(({ isSuccess }) => ({
   fontFamily: '"Press Start 2P", monospace',
   fontSize: '1.8rem',
@@ -214,9 +183,40 @@ const ResultText = styled(Typography, {
   marginTop: '2rem',
 }));
 
-// ========================================
-// COMPONENT
-// ========================================
+const Countdown = styled(Typography)({
+  fontFamily: '"Press Start 2P", monospace',
+  fontSize: '6rem',
+  color: '#FFD700',
+  textShadow: '4px 4px 0px rgba(0, 0, 0, 0.5)',
+});
+
+// ----- Helpers -------------------------------------------------------
+
+const FEEDBACK_FLASH_MS = 300;
+const RESULT_DELAY_MS = 1000;
+const PERFECT_THRESHOLD_RATIO = 0.6;
+
+const getTimerColor = (timeLeft: number): 'success' | 'warning' | 'error' => {
+  if (timeLeft > 60) return 'success';
+  if (timeLeft > 30) return 'warning';
+  return 'error';
+};
+
+const getHabitatBackground = (habitat?: string) => {
+  if (!habitat || habitat === 'any') return {};
+  const habitatBg = HABITAT_BACKGROUNDS[habitat.toLowerCase()];
+  return habitatBg ? { background: habitatBg.gradient } : {};
+};
+
+// ----- Component -----------------------------------------------------
+
+interface QTEResult {
+  success: boolean;
+  buttonsCorrect: number;
+  totalButtons: number;
+  timeTaken: number;
+  perfect: boolean;
+}
 
 interface QTEMinigameProps {
   open: boolean;
@@ -225,36 +225,11 @@ interface QTEMinigameProps {
   pokemonSprite: string;
   sequence: string[];
   timePerButton: number;
-  habitat?: string; // Optional habitat for dynamic background
-  onComplete: (result: {
-    success: boolean;
-    buttonsCorrect: number;
-    totalButtons: number;
-    timeTaken: number;
-    perfect: boolean;
-  }) => void;
+  habitat?: string;
+  onComplete: (result: QTEResult) => void;
 }
 
-const ARROW_ICONS: { [key: string]: React.ReactElement } = {
-  up: <KeyboardArrowUpIcon />,
-  down: <KeyboardArrowDownIcon />,
-  left: <KeyboardArrowLeftIcon />,
-  right: <KeyboardArrowRightIcon />,
-};
-
-const ARROW_NAMES: { [key: string]: string } = {
-  up: 'UP',
-  down: 'DOWN',
-  left: 'LEFT',
-  right: 'RIGHT',
-};
-
-const KEY_MAP: { [key: string]: string } = {
-  ArrowUp: 'up',
-  ArrowDown: 'down',
-  ArrowLeft: 'left',
-  ArrowRight: 'right',
-};
+type GameState = 'playing' | 'success' | 'failure';
 
 export const QTEMinigame: React.FC<QTEMinigameProps> = ({
   open,
@@ -266,105 +241,80 @@ export const QTEMinigame: React.FC<QTEMinigameProps> = ({
   habitat,
   onComplete,
 }) => {
-  // Game state
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(100);
   const [buttonsCorrect, setButtonsCorrect] = useState(0);
-  const [gameState, setGameState] = useState<'playing' | 'success' | 'failure'>('playing');
-  const [feedbackState, setFeedbackState] = useState<'none' | 'correct' | 'wrong'>('none');
+  const [gameState, setGameState] = useState<GameState>('playing');
+  const [feedbackState, setFeedbackState] = useState<FeedbackState>('none');
   const [buttonTimes, setButtonTimes] = useState<number[]>([]);
-  
-  // Countdown state
-  const [countdown, setCountdown] = useState(3);
-  const [showCountdown, setShowCountdown] = useState(true);
-  
+
   const startTimeRef = useRef<number>(Date.now());
   const buttonStartTimeRef = useRef<number>(Date.now());
-  const timerRef = useRef<number | null>(null);
 
-  // Get background style based on habitat
-  const getHabitatBackground = () => {
-    if (!habitat || habitat === 'any') return {};
-    const habitatBg = HABITAT_BACKGROUNDS[habitat.toLowerCase()];
-    if (!habitatBg) return {};
-    return { background: habitatBg.gradient };
-  };
-
-  // Reset game when opened
+  // ----- Reset whenever the dialog opens ------------------------------
   useEffect(() => {
-    if (open) {
-      setCurrentIndex(0);
-      setTimeLeft(100);
-      setButtonsCorrect(0);
-      setGameState('playing');
-      setFeedbackState('none');
-      setButtonTimes([]);
-      setCountdown(3);
-      setShowCountdown(true);
-      startTimeRef.current = Date.now();
-      buttonStartTimeRef.current = Date.now();
-    }
+    if (!open) return;
+    setCurrentIndex(0);
+    setButtonsCorrect(0);
+    setGameState('playing');
+    setFeedbackState('none');
+    setButtonTimes([]);
+    startTimeRef.current = Date.now();
+    buttonStartTimeRef.current = Date.now();
   }, [open]);
 
-  // Countdown logic (3, 2, 1)
-  useEffect(() => {
-    if (!open || !showCountdown) return;
+  // ----- 3-2-1 countdown ----------------------------------------------
+  const handleCountdownComplete = useCallback(() => {
+    startTimeRef.current = Date.now();
+    buttonStartTimeRef.current = Date.now();
+  }, []);
 
-    if (countdown > 0) {
-      const timer = setTimeout(() => {
-        setCountdown(countdown - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else {
-      // Countdown finished, start game
-      setShowCountdown(false);
-      startTimeRef.current = Date.now();
-      buttonStartTimeRef.current = Date.now();
-    }
-  }, [open, showCountdown, countdown]);
+  const countdown = useCountdown({
+    from: 3,
+    active: open,
+    onComplete: handleCountdownComplete,
+  });
+  const showCountdown = countdown > 0;
 
-  // Timer logic for current button
-  useEffect(() => {
-    if (!open || gameState !== 'playing' || showCountdown) return;
+  // ----- Per-button timer --------------------------------------------
+  const finishWithFailure = useCallback(() => {
+    setFeedbackState('wrong');
+    setTimeout(() => setFeedbackState('none'), FEEDBACK_FLASH_MS);
 
-    const interval = 10; // Update every 10ms for smooth animation
-    const decrementAmount = (100 / (timePerButton * 1000)) * interval;
+    const totalTime = (Date.now() - startTimeRef.current) / 1000;
+    setGameState('failure');
 
-    timerRef.current = window.setInterval(() => {
-      setTimeLeft((prev) => {
-        const newTime = prev - decrementAmount;
-        if (newTime <= 0) {
-          // Time out - wrong button
-          handleWrongButton();
-          return 100;
-        }
-        return newTime;
+    setTimeout(() => {
+      onComplete({
+        success: false,
+        buttonsCorrect,
+        totalButtons: sequence.length,
+        timeTaken: totalTime,
+        perfect: false,
       });
-    }, interval);
+    }, RESULT_DELAY_MS);
+  }, [buttonsCorrect, sequence.length, onComplete]);
 
-    return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-    };
-  }, [open, gameState, currentIndex, timePerButton, showCountdown]);
+  const timeLeft = useQTETimer({
+    active: open && gameState === 'playing' && !showCountdown,
+    secondsPerButton: timePerButton,
+    resetKey: currentIndex,
+    onTimeout: finishWithFailure,
+  });
 
+  // ----- Correct-key handler ------------------------------------------
   const handleCorrectButton = useCallback(() => {
     const buttonTime = Date.now() - buttonStartTimeRef.current;
-    setButtonTimes((prev) => [...prev, buttonTime]);
-    
-    setButtonsCorrect((prev) => prev + 1);
+    const allTimes = [...buttonTimes, buttonTime];
+    setButtonTimes(allTimes);
+    setButtonsCorrect((n) => n + 1);
     setFeedbackState('correct');
-    
-    setTimeout(() => setFeedbackState('none'), 300);
+    setTimeout(() => setFeedbackState('none'), FEEDBACK_FLASH_MS);
 
     if (currentIndex + 1 >= sequence.length) {
-      // Game complete - success!
       const totalTime = (Date.now() - startTimeRef.current) / 1000;
-      const allTimes = [...buttonTimes, buttonTime];
-      
-      // Check for perfect - all buttons pressed quickly (within 60% of time limit)
-      const perfectThreshold = timePerButton * 0.6 * 1000; // Convert to ms
-      const perfect = allTimes.every(time => time <= perfectThreshold);
-      
+      const perfectThresholdMs = timePerButton * PERFECT_THRESHOLD_RATIO * 1000;
+      const perfect = allTimes.every((t) => t <= perfectThresholdMs);
+
       setGameState('success');
       setTimeout(() => {
         onComplete({
@@ -374,63 +324,33 @@ export const QTEMinigame: React.FC<QTEMinigameProps> = ({
           timeTaken: totalTime,
           perfect,
         });
-      }, 1000);
+      }, RESULT_DELAY_MS);
     } else {
-      setCurrentIndex((prev) => prev + 1);
-      setTimeLeft(100);
+      setCurrentIndex((idx) => idx + 1);
       buttonStartTimeRef.current = Date.now();
     }
-  }, [currentIndex, sequence.length, onComplete, timePerButton, buttonTimes]);
+  }, [buttonTimes, currentIndex, sequence.length, timePerButton, onComplete]);
 
-  const handleWrongButton = useCallback(() => {
-    setFeedbackState('wrong');
-    
-    setTimeout(() => setFeedbackState('none'), 300);
-    
-    // Game over - failure
-    const totalTime = (Date.now() - startTimeRef.current) / 1000;
-    setGameState('failure');
-    
-    setTimeout(() => {
-      onComplete({
-        success: false,
-        buttonsCorrect,
-        totalButtons: sequence.length,
-        timeTaken: totalTime,
-        perfect: false,
-      });
-    }, 1000);
-  }, [buttonsCorrect, sequence.length, onComplete]);
-
-  // Keyboard event handler
-  useEffect(() => {
-    if (!open || gameState !== 'playing' || showCountdown) return;
-
-    const handleKeyPress = (event: KeyboardEvent) => {
-      const key = KEY_MAP[event.key];
-      if (!key) return;
-
-      event.preventDefault();
-
+  // ----- Keyboard handler --------------------------------------------
+  const handleArrowKey = useCallback(
+    (key: ArrowKey) => {
       if (key === sequence[currentIndex]) {
         handleCorrectButton();
       } else {
-        handleWrongButton();
+        finishWithFailure();
       }
-    };
+    },
+    [currentIndex, finishWithFailure, handleCorrectButton, sequence],
+  );
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [open, gameState, currentIndex, sequence, handleCorrectButton, handleWrongButton, showCountdown]);
+  useArrowKeyListener({
+    active: open && gameState === 'playing' && !showCountdown,
+    onArrowKey: handleArrowKey,
+  });
 
-  const getTimerColor = () => {
-    if (timeLeft > 60) return 'success';
-    if (timeLeft > 30) return 'warning';
-    return 'error';
-  };
-
+  // ----- Render -------------------------------------------------------
   const currentButton = sequence[currentIndex];
-  const upcomingButtons = sequence.slice(currentIndex + 1, currentIndex + 3); // Show next 1-2 buttons
+  const upcomingButtons = sequence.slice(currentIndex + 1, currentIndex + 3);
 
   return (
     <Dialog
@@ -459,88 +379,61 @@ export const QTEMinigame: React.FC<QTEMinigameProps> = ({
         <CloseIcon />
       </IconButton>
 
-      <GameContainer feedbackState={feedbackState} sx={getHabitatBackground()}>
-        <TitleText>
-          CATCHING {pokemonName.toUpperCase()}!
-        </TitleText>
+      <GameContainer feedbackState={feedbackState} sx={getHabitatBackground(habitat)}>
+        <TitleText>CATCHING {pokemonName.toUpperCase()}!</TitleText>
 
         <PokemonSprite src={pokemonSprite} alt={pokemonName} />
 
-        {/* COUNTDOWN: 3, 2, 1 */}
-        {showCountdown && countdown > 0 && (
+        {showCountdown && (
           <Box sx={{ textAlign: 'center', my: 4 }}>
-            <Typography
-              sx={{
-                fontFamily: '"Press Start 2P", monospace',
-                fontSize: '6rem',
-                color: '#FFD700',
-                textShadow: '4px 4px 0px rgba(0, 0, 0, 0.5)',
-              }}
-            >
-              {countdown}
-            </Typography>
+            <Countdown>{countdown}</Countdown>
           </Box>
         )}
 
-        {/* GAME: Show after countdown */}
         {!showCountdown && gameState === 'playing' && (
           <>
-            {/* Upcoming buttons preview (1-2 dimmed buttons) */}
             {upcomingButtons.length > 0 && (
               <UpcomingButtonsContainer>
                 {upcomingButtons.map((button, idx) => (
                   <UpcomingButton key={idx}>
-                    {ARROW_ICONS[button]}
+                    {ARROW_ICONS[button as ArrowKey]}
                   </UpcomingButton>
                 ))}
               </UpcomingButtonsContainer>
             )}
 
-            {/* Current button (BIG, pulsing) */}
             <CurrentButtonContainer isPulsing={feedbackState === 'none'}>
               <CurrentButton>
-                {ARROW_ICONS[currentButton]}
+                {ARROW_ICONS[currentButton as ArrowKey]}
               </CurrentButton>
             </CurrentButtonContainer>
 
-            {/* Instruction */}
             <InstructionText>
-              Press {ARROW_NAMES[currentButton]}!
+              Press {ARROW_NAMES[currentButton as ArrowKey]}!
             </InstructionText>
 
-            {/* Timer section */}
             <TimerSection>
               <ProgressLabel>
                 ⚡ Button {currentIndex + 1} of {sequence.length} ⚡
               </ProgressLabel>
-              <TimerBar 
-                variant="determinate" 
-                value={timeLeft} 
-                color={getTimerColor()} 
+              <TimerBar
+                variant="determinate"
+                value={timeLeft}
+                color={getTimerColor(timeLeft)}
               />
             </TimerSection>
 
-            {/* Stats */}
             <StatsText>
               Accuracy: {((buttonsCorrect / (currentIndex + 1)) * 100).toFixed(0)}%
             </StatsText>
           </>
         )}
 
-        {/* SUCCESS STATE */}
-        {gameState === 'success' && (
-          <ResultText isSuccess={true}>
-            SUCCESS!
-          </ResultText>
-        )}
-
-        {/* FAILURE STATE */}
-        {gameState === 'failure' && (
-          <ResultText isSuccess={false}>
-            FAILED!
-          </ResultText>
-        )}
+        {gameState === 'success' && <ResultText isSuccess>SUCCESS!</ResultText>}
+        {gameState === 'failure' && <ResultText isSuccess={false}>FAILED!</ResultText>}
       </GameContainer>
     </Dialog>
   );
 };
+
+export default QTEMinigame;

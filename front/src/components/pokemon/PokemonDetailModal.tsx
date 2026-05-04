@@ -1,27 +1,36 @@
-import React, { useEffect } from 'react';
+/**
+ * PokemonDetailModal — full-screen-ish dialog showing one Pokemon's details.
+ *
+ * The body has been split into two sub-components (PokemonInfoSection and
+ * PokemonStatsSection) to keep this file focused on the dialog shell.
+ */
+
 import {
+  Box,
+  CircularProgress,
   Dialog,
   DialogContent,
-  Box,
-  Typography,
-  Chip,
-  LinearProgress,
   IconButton,
-  CircularProgress,
+  Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { Icon } from '@iconify/react';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import {
-  fetchPokemonDetail,
-  clearCurrentPokemon,
-  capturePokemon,
-  releasePokemon,
-} from '../../features/pokemon/pokemonSlice';
-import PixelButton from '../common/PixelButton';
-import { animations } from '../../styles/animations';
+import React, { useEffect } from 'react';
 
-const StyledDialog = styled(Dialog)(({ theme }) => ({
+import { PixelButton } from '../common';
+import {
+  clearCurrentPokemon,
+  fetchPokemonDetail,
+} from '../../features/pokemon/pokemonSlice';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { animations } from '../../styles/animations';
+import { getDetailSpriteUrl, padPokemonId } from '../../utils';
+import PokemonInfoSection from './detail/PokemonInfoSection';
+import PokemonStatsSection from './detail/PokemonStatsSection';
+
+// ----- Styled bits ---------------------------------------------------
+
+const StyledDialog = styled(Dialog)({
   '& .MuiDialog-paper': {
     borderRadius: 0,
     border: '4px solid #000',
@@ -30,7 +39,7 @@ const StyledDialog = styled(Dialog)(({ theme }) => ({
     width: '100%',
     backgroundColor: '#fff',
   },
-}));
+});
 
 const Header = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
@@ -44,13 +53,13 @@ const Header = styled(Box)(({ theme }) => ({
   alignItems: 'center',
 }));
 
-const Title = styled(Typography)(({ theme }) => ({
+const Title = styled(Typography)({
   fontFamily: '"Press Start 2P", monospace',
   fontSize: '1.2rem',
   color: '#fff',
   textShadow: '2px 2px 0px rgba(0, 0, 0, 0.3)',
   textTransform: 'capitalize',
-}));
+});
 
 const CloseButton = styled(IconButton)({
   color: '#fff',
@@ -90,64 +99,6 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
   marginBottom: theme.spacing(2),
 }));
 
-const StatBar = styled(Box)(({ theme }) => ({
-  marginBottom: theme.spacing(1.5),
-}));
-
-const StatLabel = styled(Typography)(({ theme }) => ({
-  fontFamily: '"Roboto Mono", monospace',
-  fontSize: '0.75rem',
-  fontWeight: 'bold',
-  textTransform: 'capitalize',
-  marginBottom: theme.spacing(0.5),
-}));
-
-const StyledLinearProgress = styled(LinearProgress)(({ theme }) => ({
-  height: 12,
-  borderRadius: 0,
-  border: '2px solid #000',
-  backgroundColor: '#E0E0E0',
-  '& .MuiLinearProgress-bar': {
-    backgroundColor: theme.palette.primary.main,
-  },
-}));
-
-const TypeChip = styled(Chip)<{ pokemonType: string }>(({ theme, pokemonType }) => {
-  const typeColors: { [key: string]: string } = {
-    normal: '#A8A878',
-    fire: '#F08030',
-    water: '#6890F0',
-    electric: '#F8D030',
-    grass: '#78C850',
-    ice: '#98D8D8',
-    fighting: '#C03028',
-    poison: '#A040A0',
-    ground: '#E0C068',
-    flying: '#A890F0',
-    psychic: '#F85888',
-    bug: '#A8B820',
-    rock: '#B8A038',
-    ghost: '#705898',
-    dragon: '#7038F8',
-    dark: '#705848',
-    steel: '#B8B8D0',
-    fairy: '#EE99AC',
-  };
-
-  return {
-    backgroundColor: typeColors[pokemonType] || '#777',
-    color: '#fff',
-    fontFamily: '"Roboto Mono", monospace',
-    fontSize: '0.8rem',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    border: '2px solid #000',
-    borderRadius: 0,
-    marginRight: theme.spacing(1),
-    marginBottom: theme.spacing(1),
-  };
-});
-
 const InfoText = styled(Typography)(({ theme }) => ({
   fontFamily: '"Roboto Mono", monospace',
   fontSize: '0.875rem',
@@ -175,6 +126,8 @@ const CaptureIndicator = styled(Box)(({ theme }) => ({
   fontSize: '0.75rem',
 }));
 
+// ----- Component -----------------------------------------------------
+
 interface PokemonDetailModalProps {
   pokemonId: number | null;
   open: boolean;
@@ -187,8 +140,8 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
   onClose,
 }) => {
   const dispatch = useAppDispatch();
-  const { currentPokemon, isLoadingDetail, error } = useAppSelector(
-    (state) => state.pokemon
+  const { currentPokemon, isLoadingDetail } = useAppSelector(
+    (state) => state.pokemon,
   );
 
   useEffect(() => {
@@ -200,24 +153,6 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
   const handleClose = () => {
     dispatch(clearCurrentPokemon());
     onClose();
-  };
-
-  const handleCapture = () => {
-    if (currentPokemon) {
-      if (currentPokemon.is_captured) {
-        dispatch(releasePokemon(currentPokemon.id));
-      } else {
-        dispatch(capturePokemon(currentPokemon.id));
-      }
-    }
-  };
-
-  const getStatColor = (value: number): string => {
-    if (value >= 120) return '#4CAF50';
-    if (value >= 80) return '#8BC34A';
-    if (value >= 50) return '#FFC107';
-    if (value >= 30) return '#FF9800';
-    return '#FF5722';
   };
 
   return (
@@ -240,7 +175,7 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
         <>
           <Header>
             <Title>
-              #{currentPokemon.id.toString().padStart(3, '0')} {currentPokemon.name}
+              #{padPokemonId(currentPokemon.id)} {currentPokemon.name}
             </Title>
             <CloseButton onClick={handleClose} size="small">
               <Icon icon="mdi:close" width={24} />
@@ -248,7 +183,6 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
           </Header>
 
           <Content>
-            {/* Capture Status */}
             {currentPokemon.is_captured && (
               <Box sx={{ textAlign: 'center', mb: 2 }}>
                 <CaptureIndicator>
@@ -259,65 +193,19 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
             )}
 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-              {/* Left Column - Image and Basic Info */}
+              {/* Left column: image + info */}
               <Box sx={{ flex: { xs: '1 1 100%', md: '0 1 40%' } }}>
                 <Box sx={{ textAlign: 'center' }}>
                   <PokemonImage
-                    src={
-                      currentPokemon.sprites?.other?.['official-artwork']
-                        ?.front_default ||
-                      currentPokemon.sprites?.front_default ||
-                      '/placeholder-pokemon.png'
-                    }
+                    src={getDetailSpriteUrl(currentPokemon)}
                     alt={currentPokemon.name}
                   />
                 </Box>
-
-                
-
-                <Section>
-                  <SectionTitle>Types</SectionTitle>
-                  <Box>
-                    {currentPokemon.types.map((type) => (
-                      <TypeChip
-                        key={type}
-                        label={type}
-                        pokemonType={type}
-                        size="small"
-                      />
-                    ))}
-                  </Box>
-                </Section>
-
-                <Section>
-                  <SectionTitle>Physical</SectionTitle>
-                  <InfoText>
-                    <strong>Height:</strong> {(currentPokemon.height / 10).toFixed(1)}m
-                  </InfoText>
-                  <InfoText>
-                    <strong>Weight:</strong> {(currentPokemon.weight / 10).toFixed(1)}kg
-                  </InfoText>
-                  {currentPokemon.base_experience && (
-                    <InfoText>
-                      <strong>Base XP:</strong> {currentPokemon.base_experience}
-                    </InfoText>
-                  )}
-                </Section>
-
-                <Section>
-                  <SectionTitle>Abilities</SectionTitle>
-                  {currentPokemon.abilities.map((ability) => (
-                    <InfoText key={ability.name} sx={{ textTransform: 'capitalize' }}>
-                      • {ability.name.replace('-', ' ')}
-                      {ability.is_hidden && ' (Hidden)'}
-                    </InfoText>
-                  ))}
-                </Section>
+                <PokemonInfoSection pokemon={currentPokemon} />
               </Box>
 
-              {/* Right Column - Stats */}
+              {/* Right column: description + stats */}
               <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 55%' } }}>
-                {/* Description Section - NEW */}
                 {currentPokemon.description && (
                   <Section>
                     <SectionTitle>Pokédex Entry</SectionTitle>
@@ -328,59 +216,12 @@ const PokemonDetailModal: React.FC<PokemonDetailModalProps> = ({
                 )}
                 <Section>
                   <SectionTitle>Base Stats</SectionTitle>
-                  {currentPokemon.stats.map((stat) => (
-                    <StatBar key={stat.name}>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <StatLabel>{stat.name.replace('-', ' ')}</StatLabel>
-                        <Typography
-                          sx={{
-                            fontFamily: '"Press Start 2P", monospace',
-                            fontSize: '0.7rem',
-                            color: getStatColor(stat.base_stat),
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          {stat.base_stat}
-                        </Typography>
-                      </Box>
-                      <StyledLinearProgress
-                        variant="determinate"
-                        value={(stat.base_stat / 255) * 100}
-                        sx={{
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: getStatColor(stat.base_stat),
-                          },
-                        }}
-                      />
-                    </StatBar>
-                  ))}
-                  <Box
-                    sx={{
-                      mt: 2,
-                      pt: 2,
-                      borderTop: '2px solid #000',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontFamily: '"Press Start 2P", monospace',
-                        fontSize: '0.875rem',
-                        color: 'primary.main',
-                      }}
-                    >
-                      Total: {currentPokemon.stats_total}
-                    </Typography>
-                  </Box>
+                  <PokemonStatsSection
+                    stats={currentPokemon.stats}
+                    total={currentPokemon.stats_total}
+                  />
                 </Section>
 
-                {/* Action Buttons */}
                 <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
                   <PixelButton fullWidth onClick={handleClose} pixelColor="#666">
                     Close

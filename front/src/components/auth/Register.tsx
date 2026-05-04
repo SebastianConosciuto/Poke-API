@@ -4,7 +4,6 @@ import {
   Box,
   Typography,
   Link,
-  Alert,
   InputAdornment,
   IconButton,
 } from '@mui/material';
@@ -12,10 +11,13 @@ import { Visibility, VisibilityOff, PersonOutline } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { register, clearError } from '../../features/auth/authSlice';
-import PixelCard from '../common/PixelCard';
-import PixelButton from '../common/PixelButton';
-import PixelTextField from '../common/PixelTextField';
-import PokeballLoading from '../common/PokeballLoading';
+import {
+  PixelAlert,
+  PixelButton,
+  PixelCard,
+  PixelTextField,
+  PokeballLoading,
+} from '../common';
 import { animations } from '../../styles/animations';
 
 const RegisterContainer = styled(Box)(({ theme }) => ({
@@ -194,16 +196,7 @@ const Register: React.FC = () => {
         <PixelCard showLight showIndicators>
           <Form onSubmit={handleSubmit}>
             {(error || passwordError) && (
-              <Alert 
-                severity="error"
-                sx={{ 
-                  borderRadius: 0, 
-                  border: '3px solid currentColor',
-                  fontFamily: '"Roboto Mono", monospace',
-                }}
-              >
-                {error || passwordError}
-              </Alert>
+              <PixelAlert severity="error">{error || passwordError}</PixelAlert>
             )}
 
             <PixelTextField

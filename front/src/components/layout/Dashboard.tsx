@@ -1,109 +1,31 @@
-import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Container, Box, Typography, Alert, CircularProgress } from '@mui/material';
-import { styled, keyframes } from '@mui/material/styles';
+/**
+ * Dashboard — landing page after login.
+ *
+ * Stat fetching, refresh-on-focus, and refresh-on-route-change live in
+ * `useUserStats`. Quotes data lives in `constants/quotes`. Layout uses
+ * the shared PageContainer / PageHeader.
+ */
+
+import { Alert, Box, CircularProgress, Container, Typography } from '@mui/material';
 import { Icon } from '@iconify/react';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { styled } from '@mui/material/styles';
+import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import {
+  PageContainer,
+  PageHeader,
+  PixelButton,
+  PixelCard,
+} from '../common';
+import { getRandomQuote } from '../../constants';
 import { logout } from '../../features/auth/authSlice';
-import PixelButton from '../common/PixelButton';
-import PixelCard from '../common/PixelCard';
-import { authService } from '../../services/authService';
-import type { UserStats } from '../../services/authService';
+import { useUserStats } from '../../hooks';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { animations } from '../../styles/animations';
+import { calculateXpProgress } from '../../utils';
 
-// Animations
-const slideIn = keyframes`
-  from {
-    transform: translateY(-20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-`;
-
-const fadeIn = keyframes`
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-`;
-
-const animations = {
-  slideIn,
-  fadeIn,
-};
-
-// Pokemon quotes for inspiration
-const POKEMON_QUOTES = [
-  {
-    quote: "Do you have what it takes to be a Pokemon Master?",
-    author: "Professor Oak"
-  },
-  {
-    quote: "The important thing is not how long you live. It's what you accomplish with your life.",
-    author: "Grovyle"
-  },
-  {
-    quote: "We do have a lot in common. The same earth, the same air, the same sky.",
-    author: "Mewtwo"
-  },
-  {
-    quote: "There's no sense in going out of your way just to get somebody to like you.",
-    author: "Ash Ketchum"
-  },
-  {
-    quote: "Knowing what's right doesn't mean much unless you do what's right.",
-    author: "N"
-  },
-  {
-    quote: "Even if we can't understand each other, that's not a reason to reject each other.",
-    author: "Ash Ketchum"
-  }
-];
-
-const DashboardContainer = styled(Box)(({ theme }) => ({
-  minHeight: '100vh',
-  backgroundColor: '#E8F5E9',
-  backgroundImage: `
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 20px,
-      rgba(0, 0, 0, 0.02) 20px,
-      rgba(0, 0, 0, 0.02) 40px
-    ),
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 20px,
-      rgba(0, 0, 0, 0.02) 20px,
-      rgba(0, 0, 0, 0.02) 40px
-    )
-  `,
-  padding: theme.spacing(4),
-}));
-
-const Header = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.primary.main,
-  padding: theme.spacing(3),
-  marginBottom: theme.spacing(4),
-  border: '4px solid #000',
-  boxShadow: '8px 8px 0px rgba(0, 0, 0, 0.25)',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  animation: `${animations.slideIn} 0.5s ease-out`,
-}));
-
-const Title = styled(Typography)(({ theme }) => ({
-  fontFamily: '"Press Start 2P", monospace',
-  fontSize: '1.5rem',
-  color: '#fff',
-  textShadow: '3px 3px 0px rgba(0, 0, 0, 0.3)',
-}));
+// ----- Styled bits ---------------------------------------------------
 
 const WelcomeCard = styled(PixelCard)(({ theme }) => ({
   animation: `${animations.fadeIn} 0.7s ease-out`,
@@ -138,9 +60,11 @@ const ProgressBar = styled(Box)(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-const ProgressFill = styled(Box)<{ width: number }>(({ width }) => ({
+const ProgressFill = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'progress',
+})<{ progress: number }>(({ progress }) => ({
   height: '100%',
-  width: `${width}%`,
+  width: `${progress}%`,
   backgroundColor: '#4CAF50',
   transition: 'width 0.5s ease-out',
   position: 'relative',
@@ -173,79 +97,36 @@ const ProgressText = styled(Typography)({
   zIndex: 1,
 });
 
+// ----- Component -----------------------------------------------------
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
-  
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Select a random quote on component mount
-  const randomQuote = useMemo(() => {
-    const randomIndex = Math.floor(Math.random() * POKEMON_QUOTES.length);
-    return POKEMON_QUOTES[randomIndex];
-  }, []);
+  const { stats, loading, error } = useUserStats();
+  const randomQuote = useMemo(getRandomQuote, []);
 
-  // FIX: Memoized fetchStats function
-  const fetchStats = useCallback(async () => {
-    try {
-      setLoading(true);
-      const userStats = await authService.getStats();
-      setStats(userStats);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to fetch stats:', err);
-      setError('Failed to load statistics');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // FIX: Fetch stats on mount AND when navigating back to dashboard
-  // The location.key changes when navigation occurs, triggering a refresh
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats, location.key]);
-
-  // FIX: Also listen for window focus to refresh stats
-  // This handles cases where user switches tabs/windows
-  useEffect(() => {
-    const handleFocus = () => {
-      fetchStats();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [fetchStats]);
+  const xpProgress = stats
+    ? calculateXpProgress(stats.experience_in_level, stats.experience_to_next_level)
+    : 0;
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
   };
 
-  // Calculate XP progress percentage
-  const xpProgress = stats 
-    ? (stats.experience_in_level / (stats.experience_in_level + stats.experience_to_next_level)) * 100
-    : 0;
-
   return (
-    <DashboardContainer>
+    <PageContainer>
       <Container maxWidth="lg">
-        <Header>
-          <Title>Pokedash</Title>
-          <PixelButton 
-            onClick={handleLogout}
-            pixelColor="#666"
-            size="small"
-          >
-            Logout
-          </PixelButton>
-        </Header>
+        <PageHeader
+          title="Pokedash"
+          actions={
+            <PixelButton onClick={handleLogout} pixelColor="#666" size="small">
+              Logout
+            </PixelButton>
+          }
+        />
 
         <WelcomeCard>
           <Typography
@@ -260,7 +141,7 @@ const Dashboard: React.FC = () => {
             Welcome, {user?.trainer_id}!
           </Typography>
 
-          <InfoText>
+          <InfoText component="div">
             ▸ This is your personal Pokédex dashboard<br />
             ▸ Track your Pokémon collection<br />
             ▸ Manage your team<br />
@@ -268,15 +149,15 @@ const Dashboard: React.FC = () => {
           </InfoText>
 
           <Box sx={{ mt: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <PixelButton 
-              pixelColor="#4CAF50" 
+            <PixelButton
+              pixelColor="#4CAF50"
               startIcon={<Icon icon="game-icons:perspective-dice-six" width="16" height="16" />}
               onClick={() => navigate('/pokedex')}
             >
               View Pokedex
             </PixelButton>
-            <PixelButton 
-              pixelColor="#9C27B0" 
+            <PixelButton
+              pixelColor="#9C27B0"
               startIcon={<Icon icon="game-icons:targeting" width="16" height="16" />}
               onClick={() => navigate('/catch')}
             >
@@ -308,7 +189,7 @@ const Dashboard: React.FC = () => {
             </Alert>
           ) : stats ? (
             <>
-              <InfoText>
+              <InfoText component="div">
                 <StatLabel>▸ Pokémon Captured:</StatLabel>
                 <StatValue>{stats.pokemon_captured}</StatValue>
                 <br />
@@ -331,9 +212,10 @@ const Dashboard: React.FC = () => {
                   Experience Progress
                 </Typography>
                 <ProgressBar>
-                  <ProgressFill width={xpProgress} />
+                  <ProgressFill progress={xpProgress} />
                   <ProgressText>
-                    {stats.experience_in_level} / {stats.experience_in_level + stats.experience_to_next_level} XP
+                    {stats.experience_in_level} /{' '}
+                    {stats.experience_in_level + stats.experience_to_next_level} XP
                   </ProgressText>
                 </ProgressBar>
                 <Typography
@@ -360,6 +242,7 @@ const Dashboard: React.FC = () => {
             }}
           >
             <Typography
+              component="div"
               sx={{
                 fontFamily: '"Roboto Mono", monospace',
                 fontSize: '0.8rem',
@@ -373,7 +256,7 @@ const Dashboard: React.FC = () => {
           </Box>
         </PixelCard>
       </Container>
-    </DashboardContainer>
+    </PageContainer>
   );
 };
 
