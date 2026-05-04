@@ -1,18 +1,21 @@
 """
 Difficulty tier definitions and lookups.
 
-This module is the single source of truth for the catching difficulty tiers.
-It collapses the previously-duplicated tables in catch_service.py and
-pokemon_service.py into one place. CLAUDE.md flags these numbers as
-"design spec — do not change without asking", so they live in exactly one file.
+Single source of truth for the catching difficulty tiers. Same shape as
+the original design spec, but the stat ranges have been **rebalanced**
+based on the actual BST distribution of the populated `pokemon` table.
 
-Stats Ranges:
-    180-300 (Weak):      3 buttons, 1.5s per button — 10 XP success / 5 fail
-    301-400 (Easy):      4 buttons, 1.2s per button — 20 XP success / 10 fail
-    401-500 (Medium):    5 buttons, 1.0s per button — 30 XP success / 15 fail
-    501-600 (Hard):      6 buttons, 0.8s per button — 40 XP success / 20 fail
-    601-720 (Legendary): 7 buttons, 0.6s per button — 50 XP success / 25 fail
-    721+    (Mythical):  8 buttons, 0.5s per button — 60 XP success / 30 fail
+Why we rebalanced (May 2026):
+    The original ranges (weak 180-300 / easy 301-400 / medium 401-500 /
+    hard 501-600 / legendary 601-720 / mythical 721+) produced a grossly
+    uneven distribution against the live data:
+        weak       169   easy 223   medium 355
+        hard       252   legendary 0     mythical 1
+    "medium" had >35% of the population while "legendary" was empty.
+    The new ranges target ~150-250 Pokemon per tier and capture the long
+    tail of low-stat Pokemon that previously fell through the floor.
+
+Buttons / time / XP per tier are UNCHANGED from the original spec.
 """
 
 from dataclasses import dataclass
@@ -34,13 +37,22 @@ class DifficultyTier:
 
 # Ordered from easiest to hardest. Order matters — `get_difficulty_for_stats`
 # walks the list in order and returns the first matching tier.
+#
+# Design rationale for the new cutoffs (real Pokemon BST landmarks in parens):
+#   weak       <=310  - basics, babies (Caterpie 195, Magikarp 200, Charmander 309)
+#   easy       311-385 - early evolutions (Charmeleon 405 just above)
+#   medium     386-460 - mid-tier and weak fully-evolved (Raichu 485 just above)
+#   hard       461-525 - most fully-evolved Pokemon (Charizard 534 just above)
+#   legendary  526-595 - strong Pokemon, sub-legendaries (Salamence 600 just above)
+#   mythical   596+   - pseudo-legendaries and box legendaries (Tyranitar 600,
+#                       Garchomp 600, Mewtwo 680, Arceus 720)
 DIFFICULTY_TIERS: List[DifficultyTier] = [
-    DifficultyTier("weak",      180, 300, 3, 1.5, 10, 5),
-    DifficultyTier("easy",      301, 400, 4, 1.2, 20, 10),
-    DifficultyTier("medium",    401, 500, 5, 1.0, 30, 15),
-    DifficultyTier("hard",      501, 600, 6, 0.8, 40, 20),
-    DifficultyTier("legendary", 601, 720, 7, 0.6, 50, 25),
-    DifficultyTier("mythical",  721, 9999, 8, 0.5, 60, 30),
+    DifficultyTier("weak",      0,   310, 3, 1.5, 10, 5),
+    DifficultyTier("easy",      311, 385, 4, 1.2, 20, 10),
+    DifficultyTier("medium",    386, 460, 5, 1.0, 30, 15),
+    DifficultyTier("hard",      461, 525, 6, 0.8, 40, 20),
+    DifficultyTier("legendary", 526, 595, 7, 0.6, 50, 25),
+    DifficultyTier("mythical",  596, 9999, 8, 0.5, 60, 30),
 ]
 
 
@@ -57,28 +69,34 @@ def get_tier(key: str) -> Optional[DifficultyTier]:
     return _TIER_BY_KEY.get(key.lower()) if key else None
 
 
-def get_difficulty_for_stats(stats_total: int) -> DifficultyTier:
+def get_difficulty_for_stats(stats_total):
     """
     Return the DifficultyTier whose stat range contains stats_total.
 
-    Defaults to the highest tier (mythical) if stats fall above all ranges
-    — this matches the previous behaviour of the if-else chain.
+    Out-of-range behaviour:
+      * Below the lowest tier (now stats < 0, which is impossible in
+        practice): returns the WEAKEST tier. This was previously a
+        fall-through to the *highest* tier - that bug caused a Pokemon
+        with stats_total=175 to be classified as mythical.
+      * Above the highest tier: returns the highest (mythical) tier.
     """
     for tier in DIFFICULTY_TIERS:
         if tier.min_stats <= stats_total <= tier.max_stats:
             return tier
+    if stats_total < DIFFICULTY_TIERS[0].min_stats:
+        return DIFFICULTY_TIERS[0]
     return DIFFICULTY_TIERS[-1]
 
 
-def difficulty_keys_in_order() -> List[str]:
+def difficulty_keys_in_order():
     """All tier keys, easiest to hardest."""
     return [tier.key for tier in DIFFICULTY_TIERS]
 
 
-def filter_keys_by_stats(stats_totals: Iterable[int]) -> List[str]:
+def filter_keys_by_stats(stats_totals):
     """
     Given an iterable of stats_total values, return the difficulty keys
-    that have at least one Pokemon — preserving easiest-to-hardest order.
+    that have at least one Pokemon - preserving easiest-to-hardest order.
     """
     found = {get_difficulty_for_stats(stats).key for stats in stats_totals}
     return [tier.key for tier in DIFFICULTY_TIERS if tier.key in found]

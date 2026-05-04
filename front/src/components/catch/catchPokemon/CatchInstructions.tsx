@@ -38,7 +38,7 @@ const CatchInstructions: React.FC = () => (
   <SectionCard>
     <SectionTitle>How to Play</SectionTitle>
 
-    <InfoText component="div">
+    <InfoText as="div">
       <strong>1. Select Location:</strong> Choose region and habitat (or "Any")<br />
       <strong>2. Choose Difficulty:</strong> Only available difficulties shown<br />
       {DIFFICULTY_TIERS.map((tier) => (

@@ -73,6 +73,11 @@ MAX_TYPE_FILTERS = 2
 # Total number of Pokemon assumed when the database count is unavailable.
 DEFAULT_TOTAL_POKEMON = 1025
 
+# Maximum number of rows to pull when computing distinct columns. Supabase's
+# default is 1000 rows, which would silently truncate the 1025-row pokemon
+# table. We raise it explicitly so SELECT DISTINCT-style queries are correct.
+MAX_POKEMON_QUERY_ROWS = 1100
+
 
 # ----------------------------------------------------------------------
 # Sentinel values for "no filter"
@@ -81,6 +86,8 @@ DEFAULT_TOTAL_POKEMON = 1025
 ANY_FILTER_VALUE = "any"
 
 
-def is_any(value: str | None) -> bool:
+def is_any(value):
     """Return True if value is missing or the literal 'any' (case-insensitive)."""
-    return not value or value.lower() == ANY_FILTER_VALUE
+    if not value:
+        return True
+    return value.lower() == ANY_FILTER_VALUE

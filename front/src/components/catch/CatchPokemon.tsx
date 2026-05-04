@@ -45,7 +45,7 @@ import {
   startCatchAttempt,
 } from '../../features/catch/catchSlice';
 import { fetchPokemonList } from '../../features/pokemon/pokemonSlice';
-import { useSnackbar } from '../../hooks';
+import { useSnackbar, USER_STATS_REFRESH_EVENT } from '../../hooks';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { capitalize, formatHyphenated } from '../../utils';
 import { animations } from '../../styles/animations';
@@ -147,6 +147,10 @@ const CatchPokemon: React.FC = () => {
       ? `${lastResult.message} ${lastResult.reward_message}`
       : lastResult.message;
     showSnackbar(message, lastResult.success ? 'success' : 'error');
+
+    // Tell any mounted Dashboard / useUserStats consumers to refetch so the
+    // new XP/level shows up immediately. Both success and failure award XP.
+    window.dispatchEvent(new Event(USER_STATS_REFRESH_EVENT));
 
     if (lastResult.success) {
       // Refresh the Pokedex list so the new capture appears.

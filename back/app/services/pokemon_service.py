@@ -13,6 +13,7 @@ from app.core.constants import (
     DEFAULT_PAGE_SIZE,
     FALLBACK_TYPES,
     MAX_PAGE_SIZE,
+    MAX_POKEMON_QUERY_ROWS,
     Table,
 )
 from app.core.difficulty import get_tier
@@ -44,11 +45,16 @@ class PokemonService:
     def get_available_types() -> List[str]:
         """All distinct Pokemon types in the database, with a hardcoded fallback."""
         try:
-            response = supabase.table(Table.POKEMON).select("types").execute()
+            response = (
+                supabase.table(Table.POKEMON)
+                .select("types")
+                .range(0, MAX_POKEMON_QUERY_ROWS - 1)
+                .execute()
+            )
             types_set: Set[str] = set()
-            for row in response.data:
-                types_set.update(row["types"])
-            return sorted(types_set)
+            for row in (response.data or []):
+                types_set.update(row.get("types") or [])
+            return sorted(types_set) if types_set else list(FALLBACK_TYPES)
         except Exception as exc:
             logger.error("Error fetching types: %s", exc)
             return list(FALLBACK_TYPES)
@@ -65,19 +71,37 @@ class PokemonService:
 
     @staticmethod
     def _distinct_column(column: str) -> List[str]:
-        """Generic helper for `SELECT DISTINCT <column> WHERE <column> IS NOT NULL`."""
+        """
+        SELECT DISTINCT <column> across the pokemon table.
+
+        We deliberately do NOT use `.not_.is_(column, "null")` here. That
+        postgrest filter has been observed to silently return [] in some
+        Supabase environments (RLS / column-level grants). Instead we pull
+        the column down and filter in Python — the column has at most ~10
+        distinct values so the cost is negligible.
+
+        We also explicitly raise the row limit; the default 1000 rows isn't
+        enough for the 1025-row pokemon table.
+        """
         try:
             response = (
                 supabase.table(Table.POKEMON)
                 .select(column)
-                .not_.is_(column, "null")
+                .range(0, MAX_POKEMON_QUERY_ROWS - 1)
                 .execute()
             )
-            values = {row[column] for row in response.data if row.get(column)}
-            return sorted(values)
         except Exception as exc:
             logger.error("Error fetching %s: %s", column, exc)
             return []
+
+        values = {row[column] for row in (response.data or []) if row.get(column)}
+        if not values:
+            logger.warning(
+                "No distinct values found for pokemon.%s — table may be empty "
+                "or the column may not be populated. Run populate_region_habitat.py.",
+                column,
+            )
+        return sorted(values)
 
     # ------------------------------------------------------------------
     # Paginated list
@@ -333,7 +357,7 @@ class PokemonService:
         return name
 
     @staticmethod
-    async def _lookup_pokemon_name(pokemon_id: int) -> Optional[str]:
+    async def _lookup_pokemon_name(pokemon_id: int):
         response = (
             supabase.table(Table.POKEMON)
             .select("name")

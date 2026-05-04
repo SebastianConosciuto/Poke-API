@@ -4,7 +4,14 @@
  *
  * Encapsulates the loading/error/stats triplet plus the two useEffects
  * that used to live in Dashboard.tsx.
+ *
+ * Also subscribes to the `cowork:user-stats-refresh` window event so other
+ * pages (e.g. CatchPokemon after a successful catch) can request a refresh
+ * without taking a Redux dependency. Any caller can fire it via
+ * `window.dispatchEvent(new Event('cowork:user-stats-refresh'))`.
  */
+
+export const USER_STATS_REFRESH_EVENT = 'cowork:user-stats-refresh';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -51,6 +58,16 @@ export const useUserStats = (): UseUserStatsResult => {
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
+  }, [refresh]);
+
+  // Re-fetch when another part of the app announces a stats change
+  // (e.g. CatchPokemon after a successful catch awards XP).
+  useEffect(() => {
+    const handleRefresh = () => {
+      refresh();
+    };
+    window.addEventListener(USER_STATS_REFRESH_EVENT, handleRefresh);
+    return () => window.removeEventListener(USER_STATS_REFRESH_EVENT, handleRefresh);
   }, [refresh]);
 
   return { stats, loading, error, refresh };

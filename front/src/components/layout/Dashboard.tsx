@@ -141,7 +141,7 @@ const Dashboard: React.FC = () => {
             Welcome, {user?.trainer_id}!
           </Typography>
 
-          <InfoText component="div">
+          <InfoText as="div">
             ▸ This is your personal Pokédex dashboard<br />
             ▸ Track your Pokémon collection<br />
             ▸ Manage your team<br />
@@ -189,8 +189,8 @@ const Dashboard: React.FC = () => {
             </Alert>
           ) : stats ? (
             <>
-              <InfoText component="div">
-                <StatLabel>▸ Pokémon Captured:</StatLabel>
+              <InfoText as="div">
+                <StatLabel as="span">▸ Pokémon Captured:</StatLabel>
                 <StatValue>{stats.pokemon_captured}</StatValue>
                 <br />
                 <StatLabel>▸ Pokédex Completion:</StatLabel>

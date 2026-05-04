@@ -10,7 +10,13 @@ from typing import List, Optional
 
 from fastapi import HTTPException, status
 
-from app.core.constants import ARROW_KEYS, REGIONS, Table, is_any
+from app.core.constants import (
+    ARROW_KEYS,
+    MAX_POKEMON_QUERY_ROWS,
+    REGIONS,
+    Table,
+    is_any,
+)
 from app.core.difficulty import (
     DIFFICULTY_TIERS,
     difficulty_keys_in_order,
@@ -216,7 +222,7 @@ class CatchService:
 
         reward_message = f"+{xp_amount} XP"
         if attempt.perfect and not existing.data:
-            reward_message = f"✨ PERFECT CATCH! {reward_message}"
+            reward_message = f"PERFECT CATCH! {reward_message}"
         reward_message = CatchService._append_levelup(reward_message, xp_result)
 
         return CatchResult(
@@ -280,8 +286,18 @@ class CatchService:
             if not is_any(region):
                 query = query.eq("region", region.lower())
 
-            response = query.execute()
-            habitats = {row["habitat"] for row in response.data if row.get("habitat")}
+            response = query.range(0, MAX_POKEMON_QUERY_ROWS - 1).execute()
+            habitats = {
+                row["habitat"]
+                for row in (response.data or [])
+                if row.get("habitat")
+            }
+            if not habitats:
+                logger.warning(
+                    "No habitats found (region=%s). Pokemon table may be missing "
+                    "habitat data - run populate_region_habitat.py.",
+                    region,
+                )
             return sorted(habitats)
 
         except Exception as exc:
@@ -301,12 +317,35 @@ class CatchService:
             if not is_any(habitat):
                 query = query.eq("habitat", habitat.lower())
 
-            response = query.execute()
+            response = query.range(0, MAX_POKEMON_QUERY_ROWS - 1).execute()
             if not response.data:
-                return ["medium"]  # Sensible default if filters yield nothing.
+                logger.warning(
+                    "No Pokemon for region=%s habitat=%s - falling back to medium",
+                    region, habitat,
+                )
+                return ["medium"]
 
             stats_totals = (
-                row.get("stats_total", 0) for row in response.data if row.get("stats_total")
+                row.get("stats_total", 0)
+                for row in response.data
+                if row.get("stats_total")
+            )
+            return filter_keys_by_stats(stats_totals)
+
+        except Exception as exc:
+            logger.error("Error getting difficulties: %s", exc)
+            return difficulty_keys_in_order()
+            if not response.data:
+                logger.warning(
+                    "No Pokemon for region=%s habitat=%s - falling back to medium",
+                    region, habitat,
+                )
+                return ["medium"]
+
+            stats_totals = (
+                row.get("stats_total", 0)
+                for row in response.data
+                if row.get("stats_total")
             )
             return filter_keys_by_stats(stats_totals)
 

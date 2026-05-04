@@ -240,9 +240,17 @@ const pokemonSlice = createSlice({
       .addCase(fetchRegions.fulfilled, (state, action) => {
         state.availableRegions = action.payload;
       })
+      .addCase(fetchRegions.rejected, (state, action) => {
+        // Surface the failure so the empty-dropdown UX has a cause attached
+        // instead of silently leaving availableRegions = [].
+        state.error = (action.payload as string) ?? 'Failed to load regions';
+      })
       // Fetch habitats
       .addCase(fetchHabitats.fulfilled, (state, action) => {
         state.availableHabitats = action.payload;
+      })
+      .addCase(fetchHabitats.rejected, (state, action) => {
+        state.error = (action.payload as string) ?? 'Failed to load habitats';
       })
       // Fetch Pokemon list
       .addCase(fetchPokemonList.pending, (state) => {
