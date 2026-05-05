@@ -23,12 +23,15 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle auth errors
+// Response interceptor: a 401 means the token is bad. Wipe BOTH the token
+// and the cached user, otherwise the next page reload would re-hydrate a
+// "logged in" UI that has no valid token to back it.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
       window.location.href = '/login';
     }
     return Promise.reject(error);

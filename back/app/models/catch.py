@@ -1,6 +1,8 @@
 """
-Models for Pokemon catching minigame
-UPDATED: Added difficulty field to CatchAttemptResult for XP scaling
+Models for Pokemon catching minigame.
+
+Stats ranges per tier are defined in app.core.difficulty.DIFFICULTY_TIERS —
+this file only carries the labels.
 """
 
 from pydantic import BaseModel, Field
@@ -9,20 +11,30 @@ from enum import Enum
 
 
 class DifficultyLevel(str, Enum):
-    """Difficulty levels for catching - Based on Pokemon total stats"""
-    WEAK = "weak"          # 180-300 stats: 3 buttons, 1.5s per button
-    EASY = "easy"          # 301-400 stats: 4 buttons, 1.2s per button
-    MEDIUM = "medium"      # 401-500 stats: 5 buttons, 1.0s per button
-    HARD = "hard"          # 501-600 stats: 6 buttons, 0.8s per button
-    LEGENDARY = "legendary" # 601-720 stats: 7 buttons, 0.6s per button
-    MYTHICAL = "mythical"  # 721+ stats: 8 buttons, 0.5s per button
+    """Difficulty tier identifiers; ranges live in app.core.difficulty."""
+    WEAK = "weak"
+    EASY = "easy"
+    MEDIUM = "medium"
+    HARD = "hard"
+    LEGENDARY = "legendary"
+    MYTHICAL = "mythical"
 
 
 class CatchRequest(BaseModel):
-    """Request to start a catch attempt"""
-    region: str = Field(..., description="Pokemon region (kanto, johto, hoenn, etc.)")
-    habitat: str = Field(..., description="Pokemon habitat (grassland, forest, cave, etc.)")
-    difficulty: DifficultyLevel = Field(..., description="Difficulty level")
+    """Request to start a catch attempt."""
+    # Default region/habitat to "any" so a partially-built request from the
+    # client (e.g. before the user picks options) doesn't 422 the user
+    # straight to the error snackbar — the catch service's `is_any` helper
+    # treats "any" as no filter.
+    region: str = Field(default="any", description="Pokemon region or 'any'")
+    habitat: str = Field(default="any", description="Pokemon habitat or 'any'")
+    # Default difficulty so the form is forgiving if the local state ever
+    # falls out of sync with the available-difficulties list returned by the
+    # /catch/difficulties endpoint (see frontend snap-back logic).
+    difficulty: DifficultyLevel = Field(
+        default=DifficultyLevel.MEDIUM,
+        description="Difficulty tier; defaults to medium if missing",
+    )
 
 
 class ButtonSequence(BaseModel):

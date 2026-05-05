@@ -1,22 +1,23 @@
 /**
- * Single difficulty <MenuItem> for the catch difficulty Select.
+ * Render helper for one difficulty <MenuItem> in the catch difficulty Select.
  *
- * Replaces six near-identical hand-written MenuItem blocks in CatchPokemon.tsx
- * — they only differed in tier metadata, which now lives in DIFFICULTY_TIERS.
+ * NOTE: This is a render FUNCTION, not a component. MUI's Select walks its
+ * direct children at runtime to read each MenuItem's `value` prop. Wrapping
+ * MenuItem in another component breaks that introspection - Select then sees
+ * zero available values, logs the "out-of-range value ... available values
+ * are ''" warning, and the controlled/uncontrolled invariant breaks.
+ *
+ * By exporting a plain render function instead of a component, the MenuItem
+ * stays a direct child of <Select> so introspection works.
  */
 
 import { Box, MenuItem, Typography } from '@mui/material';
-import type { MenuItemProps } from '@mui/material';
 import React from 'react';
 
 import { formatQteDescription, type DifficultyTier } from '../../../constants';
 
-interface DifficultyMenuItemProps extends MenuItemProps {
-  tier: DifficultyTier;
-}
-
-const DifficultyMenuItem: React.FC<DifficultyMenuItemProps> = ({ tier, ...props }) => (
-  <MenuItem {...props} value={tier.key}>
+export const renderDifficultyMenuItem = (tier: DifficultyTier): React.ReactElement => (
+  <MenuItem key={tier.key} value={tier.key}>
     <Box>
       <Typography
         sx={{
@@ -39,5 +40,3 @@ const DifficultyMenuItem: React.FC<DifficultyMenuItemProps> = ({ tier, ...props 
     </Box>
   </MenuItem>
 );
-
-export default DifficultyMenuItem;

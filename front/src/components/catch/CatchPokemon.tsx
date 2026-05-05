@@ -50,7 +50,7 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { capitalize, formatHyphenated } from '../../utils';
 import { animations } from '../../styles/animations';
 import CatchInstructions from './catchPokemon/CatchInstructions';
-import DifficultyMenuItem from './catchPokemon/DifficultyMenuItem';
+import { renderDifficultyMenuItem } from './catchPokemon/DifficultyMenuItem';
 import { QTEMinigame } from './QTEMinigame';
 
 // ----- Styled bits ---------------------------------------------------
@@ -139,6 +139,20 @@ const CatchPokemon: React.FC = () => {
     );
   }, [region, habitat, dispatch]);
 
+  // ----- Keep local `difficulty` in sync with the available list -----
+  //
+  // The backend's /catch/difficulties response shrinks/expands as the user
+  // narrows by region/habitat. If the currently-selected tier isn't in the
+  // new list any more, MUI's Select renders blank and the value the user
+  // submits is unreliable. We snap the state back to the first available
+  // option whenever that happens.
+  useEffect(() => {
+    if (difficulties.length === 0) return;
+    if (!difficulties.includes(difficulty)) {
+      setDifficulty(difficulties[0] as DifficultyKey);
+    }
+  }, [difficulties, difficulty]);
+
   // ----- Handle catch result -----------------------------------------
   useEffect(() => {
     if (!lastResult) return;
@@ -164,8 +178,16 @@ const CatchPokemon: React.FC = () => {
 
   // ----- Catch lifecycle ---------------------------------------------
   const handleStartCatch = async () => {
+    // Defensive: never let an empty/undefined value through. If for any
+    // reason the local state has fallen out of sync, fall back to whatever's
+    // first in the backend's available list, then to 'medium' as a last resort.
+    const safeDifficulty: DifficultyKey =
+      (difficulty as DifficultyKey) ||
+      (difficulties[0] as DifficultyKey) ||
+      'medium';
+
     const result = await dispatch(
-      startCatchAttempt({ region, habitat, difficulty }),
+      startCatchAttempt({ region, habitat, difficulty: safeDifficulty }),
     );
     if (startCatchAttempt.fulfilled.match(result)) {
       setShowGame(true);
@@ -277,16 +299,26 @@ const CatchPokemon: React.FC = () => {
             <PixelSelect>
               <InputLabel>Difficulty</InputLabel>
               <Select
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value as DifficultyKey)}
+                /* Bind to a value MUI is guaranteed to be able to match: either
+                   the current selection (if it's still in the available list),
+                   the first available option, or '' while the list loads.
+                   Without this guard MUI logs an "out-of-range value" warning
+                   and the Select drops to uncontrolled mode. */
+                value={
+                  difficulties.includes(difficulty)
+                    ? difficulty
+                    : (difficulties[0] ?? '')
+                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v) setDifficulty(v as DifficultyKey);
+                }}
                 label="Difficulty"
-                disabled={isLoadingDifficulties}
+                disabled={isLoadingDifficulties || difficulties.length === 0}
               >
-                {DIFFICULTY_TIERS.filter((tier) =>
-                  difficulties.includes(tier.key),
-                ).map((tier) => (
-                  <DifficultyMenuItem key={tier.key} tier={tier} />
-                ))}
+                {DIFFICULTY_TIERS
+                  .filter((tier) => difficulties.includes(tier.key))
+                  .map(renderDifficultyMenuItem)}
               </Select>
               {isLoadingDifficulties && (
                 <HelperText>Loading available difficulties...</HelperText>
